@@ -1,15 +1,11 @@
 import streamlit as st
-import pytesseract
 from PIL import Image
+import easyocr
 import pandas as pd
 import re
 import datetime
 import os
 import base64
-
-# Configurazione Tesseract per Windows
-if os.name == 'nt':
-    pytesseract.pytesseract.tesseract_cmd = r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
 
 st.set_page_config(page_title="Controllo Patenti - Guardia di Finanza", layout="centered")
 
@@ -71,8 +67,11 @@ COMUNI_CONTROLLABILI = [
     "VOLTAGGIO", "VIGNOLE BORBERA"
 ]
 
-# === OCR ===
-def estrai_dati_patente(testo):
+# === OCR con easyocr ===
+def estrai_dati_patente_easyocr(image):
+    reader = easyocr.Reader(['it'], gpu=False)
+    results = reader.readtext(image)
+    testo = "\n".join([r[1] for r in results])
     dati = {"COGNOME": "", "NOME": "", "DATA DI NASCITA": "", "LUOGO DI NASCITA": ""}
     righe = testo.split("\n")
     for riga in righe:
@@ -92,10 +91,10 @@ def estrai_dati_patente(testo):
                 dati["LUOGO DI NASCITA"] = luogo.upper()
     return dati
 
-# === NAVIGAZIONE A SCHEDE ===
+# === NAVIGAZIONE ===
 tabs = st.tabs(["🏁 Inizio", "📝 Inserimento", "✅ Fine", "📊 Report"])
 
-# === TAB 1: INIZIO ===
+# === TAB 1 ===
 with tabs[0]:
     st.header("🏁 Inizio Posto di Controllo")
     comune = st.selectbox("Comune del controllo", COMUNI_CONTROLLABILI)
@@ -106,7 +105,7 @@ with tabs[0]:
         st.session_state.comune_attivo = comune
         st.success(f"Controllo iniziato alle {st.session_state.inizio_turno.strftime('%H:%M:%S')} nel comune di {comune}")
 
-# === TAB 2: INSERIMENTO ===
+# === TAB 2 ===
 with tabs[1]:
     st.header("📝 Inserimento Dati")
     uploaded_file = st.file_uploader("Carica immagine patente", type=["png", "jpg", "jpeg"])
@@ -117,8 +116,7 @@ with tabs[1]:
         st.image(st.session_state.last_uploaded, caption="📸 Immagine caricata", use_container_width=True)
         with st.spinner("🧠 Estrazione in corso..."):
             image = Image.open(st.session_state.last_uploaded).convert("RGB")
-            testo_estratto = pytesseract.image_to_string(image, lang="ita")
-            dati = estrai_dati_patente(testo_estratto)
+            dati = estrai_dati_patente_easyocr(image)
 
         cognome = st.text_input("COGNOME", value=dati["COGNOME"])
         nome = st.text_input("NOME", value=dati["NOME"])
@@ -151,7 +149,7 @@ with tabs[1]:
             st.session_state.last_uploaded = None
             st.success("Dati salvati e immagine azzerata.")
 
-# === TAB 3: FINE ===
+# === TAB 3 ===
 with tabs[2]:
     st.header("✅ Fine Posto di Controllo")
     if st.button("🛑 Termina il controllo"):
@@ -159,7 +157,7 @@ with tabs[2]:
         st.session_state.last_uploaded = None
         st.success(f"Controllo terminato alle {st.session_state.fine_turno.strftime('%H:%M:%S')}")
 
-# === TAB 4: REPORT ===
+# === TAB 4 ===
 with tabs[3]:
     st.header("📊 Report e Statistiche")
     if len(st.session_state.registro) == 0:
@@ -168,7 +166,6 @@ with tabs[3]:
         df = pd.DataFrame(st.session_state.registro)
         st.dataframe(df)
 
-        # Calcolo intervalli per ogni comune
         st.subheader("🕒 Attività per Comune")
         for comune in df['COMUNE'].unique():
             sottodf = df[df['COMUNE'] == comune].sort_values('ORA')
@@ -182,7 +179,6 @@ with tabs[3]:
         st.markdown(f"**COPE:** {sum(df['COPE'] == 'SÌ')}")
         st.markdown(f"**Rilievi contestati:** {sum(df['RILIEVI'] != 'NO')}")
 
-        # Download Excel
         df['ORA'] = df['ORA'].astype(str)
         file_path = "report_turno.xlsx"
         df.to_excel(file_path, index=False)
