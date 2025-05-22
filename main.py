@@ -8,6 +8,7 @@ import os
 import base64
 import numpy as np
 from pytz import timezone
+from streamlit_cropper import st_cropper
 
 italy = timezone("Europe/Rome")
 
@@ -39,9 +40,9 @@ if os.path.exists("logo.png"):
     st.markdown(f"""
     <div style='text-align: center;'>
         <img src='data:image/png;base64,{logo_base64}' width='120'>
-        <h1 style='color: darkgreen;'>GUARDIA DI FINANZA</h1>
-        <h2>COMPAGNIA NOVI LIGURE</h2>
-        <h3 style='color: gray;'>Nucleo Mobile</h3>
+        <h1 style='color: red;'>GUARDIA DI FINANZA</h1>
+        <h2 style='color: yellow;'>COMPAGNIA NOVI LIGURE</h2>
+        <h3 style='color: red;'>Nucleo Mobile</h3>
     </div>
     <hr>
     """, unsafe_allow_html=True)
@@ -124,42 +125,46 @@ with tabs[1]:
         st.session_state.last_uploaded = uploaded_file
 
     if st.session_state.last_uploaded:
-        st.image(st.session_state.last_uploaded, caption="📸 Immagine caricata", use_container_width=True)
-        with st.spinner("🧠 Estrazione in corso..."):
-            image = Image.open(st.session_state.last_uploaded).convert("RGB")
-            image_np = np.array(image)
-            dati = estrai_dati_patente_easyocr(image_np)
+        image = Image.open(st.session_state.last_uploaded).convert("RGB")
+        st.subheader("✂️ Ritaglia l'immagine prima dell'elaborazione")
+        cropped_img = st_cropper(image, realtime_update=True, box_color='#00FF00', aspect_ratio=None)
+        if cropped_img:
+            image_np = np.array(cropped_img)
+            with st.spinner("🧠 Estrazione in corso..."):
+                dati = estrai_dati_patente_easyocr(image_np)
 
-        cognome = st.text_input("COGNOME", value=dati["COGNOME"])
-        nome = st.text_input("NOME", value=dati["NOME"])
-        data_nascita = st.text_input("DATA DI NASCITA", value=dati["DATA DI NASCITA"])
-        luogo_nascita = st.text_input("LUOGO DI NASCITA", value=dati["LUOGO DI NASCITA"])
-        marca_modello = st.text_input("MARCA E MODELLO VEICOLO").upper()
-        targa = st.text_input("TARGA").upper()
-        commerciale = st.checkbox("Veicolo commerciale?")
-        cope = st.checkbox("COPE?")
-        cinofili = st.checkbox("Intervento cinofili?")
-        rilievi = st.checkbox("Rilievi contestati?")
-        rilievi_note = st.text_input("Estremi rilievo") if rilievi else "NO"
+            st.image(cropped_img, caption="Immagine ritagliata", use_container_width=True)
 
-        if st.button("💾 Salva controllo"):
-            orario = datetime.datetime.now(italy)
-            st.session_state.registro.append({
-                "COMUNE": st.session_state.comune_attivo,
-                "ORA": orario,
-                "COGNOME": cognome,
-                "NOME": nome,
-                "DATA NASCITA": data_nascita,
-                "LUOGO NASCITA": luogo_nascita,
-                "MARCA MODELLO": marca_modello,
-                "TARGA": targa,
-                "COMMERCIALE": "SÌ" if commerciale else "NO",
-                "COPE": "SÌ" if cope else "NO",
-                "CINOFILI": "SÌ" if cinofili else "NO",
-                "RILIEVI": rilievi_note.upper() if rilievi_note != "NO" else "NO"
-            })
-            st.session_state.last_uploaded = None
-            st.success("Dati salvati e immagine azzerata.")
+            cognome = st.text_input("COGNOME", value=dati["COGNOME"])
+            nome = st.text_input("NOME", value=dati["NOME"])
+            data_nascita = st.text_input("DATA DI NASCITA", value=dati["DATA DI NASCITA"])
+            luogo_nascita = st.text_input("LUOGO DI NASCITA", value=dati["LUOGO DI NASCITA"])
+            marca_modello = st.text_input("MARCA E MODELLO VEICOLO").upper()
+            targa = st.text_input("TARGA").upper()
+            commerciale = st.checkbox("Veicolo commerciale?")
+            cope = st.checkbox("COPE?")
+            cinofili = st.checkbox("Intervento cinofili?")
+            rilievi = st.checkbox("Rilievi contestati?")
+            rilievi_note = st.text_input("Estremi rilievo") if rilievi else "NO"
+
+            if st.button("💾 Salva controllo"):
+                orario = datetime.datetime.now(italy)
+                st.session_state.registro.append({
+                    "COMUNE": st.session_state.comune_attivo,
+                    "ORA": orario,
+                    "COGNOME": cognome,
+                    "NOME": nome,
+                    "DATA NASCITA": data_nascita,
+                    "LUOGO NASCITA": luogo_nascita,
+                    "MARCA MODELLO": marca_modello,
+                    "TARGA": targa,
+                    "COMMERCIALE": "SÌ" if commerciale else "NO",
+                    "COPE": "SÌ" if cope else "NO",
+                    "CINOFILI": "SÌ" if cinofili else "NO",
+                    "RILIEVI": rilievi_note.upper() if rilievi_note != "NO" else "NO"
+                })
+                st.session_state.last_uploaded = None
+                st.success("Dati salvati e immagine azzerata.")
 
 with tabs[2]:
     st.header("✅ Fine Posto di Controllo")
