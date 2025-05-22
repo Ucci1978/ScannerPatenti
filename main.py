@@ -40,9 +40,9 @@ if os.path.exists("logo.png"):
     st.markdown(f"""
     <div style='text-align: center;'>
         <img src='data:image/png;base64,{logo_base64}' width='120'>
-        <h1 style='color: red;'>GUARDIA DI FINANZA</h1>
-        <h2 style='color: yellow;'>COMPAGNIA NOVI LIGURE</h2>
-        <h3 style='color: red;'>Nucleo Mobile</h3>
+        <h1 style='color: darkgreen;'>GUARDIA DI FINANZA</h1>
+        <h2>COMPAGNIA NOVI LIGURE</h2>
+        <h3 style='color: gray;'>Nucleo Mobile</h3>
     </div>
     <hr>
     """, unsafe_allow_html=True)
@@ -81,28 +81,36 @@ def estrai_dati_patente_easyocr(image_np):
     reader = get_easyocr_reader()
     results = reader.readtext(image_np)
     testo = "\n".join([r[1] for r in results])
-    if not testo.strip():
-        st.warning("❗ Nessun testo rilevato dall'immagine. Assicurati che la foto sia leggibile.")
-    else:
-        st.text_area("📄 Testo OCR rilevato (debug)", testo, height=200)
+    st.text_area("📄 Testo OCR rilevato (debug)", testo, height=200)
 
     dati = {"COGNOME": "", "NOME": "", "DATA DI NASCITA": "", "LUOGO DI NASCITA": ""}
-    righe = testo.split("\n")
+    righe = [r.strip() for r in testo.split("\n") if r.strip()]
+
+    blocchi = {}
+    blocco_attivo = None
+
     for riga in righe:
-        riga_pulita = riga.strip()
-        if riga_pulita.lower().startswith("1."):
-            dati["COGNOME"] = riga_pulita[2:].strip().upper()
-        elif riga_pulita.lower().startswith("2."):
-            dati["NOME"] = riga_pulita[2:].strip().upper()
-        elif riga_pulita.lower().startswith("3."):
-            match_data = re.search(r"\d{2}/\d{2}/\d{2,4}", riga_pulita)
-            if match_data:
-                data_raw = match_data.group(0)
-                giorno, mese, anno = data_raw.split("/")
-                anno = "19" + anno if len(anno) == 2 and int(anno) > 25 else ("20" + anno if len(anno) == 2 else anno)
-                dati["DATA DI NASCITA"] = f"{giorno}/{mese}/{anno}"
-                luogo = riga_pulita[2:].replace(match_data.group(), "").strip(" ,.-")
-                dati["LUOGO DI NASCITA"] = luogo.upper()
+        if re.match(r"^\d\.", riga):
+            blocco_attivo = riga[0]
+            blocchi[blocco_attivo] = []
+        elif blocco_attivo:
+            blocchi[blocco_attivo].append(riga)
+
+    if "1" in blocchi:
+        dati["COGNOME"] = " ".join(blocchi["1"]).strip().upper()
+    if "2" in blocchi:
+        dati["NOME"] = " ".join(blocchi["2"]).strip().upper()
+    if "3" in blocchi:
+        blocco3 = " ".join(blocchi["3"])
+        match_data = re.search(r"\d{2}/\d{2}/\d{2,4}", blocco3)
+        if match_data:
+            data_raw = match_data.group(0)
+            giorno, mese, anno = data_raw.split("/")
+            anno = "19" + anno if len(anno) == 2 and int(anno) > 25 else ("20" + anno if len(anno) == 2 else anno)
+            dati["DATA DI NASCITA"] = f"{giorno}/{mese}/{anno}"
+            luogo = blocco3.replace(match_data.group(), "").strip(" ,.-")
+            dati["LUOGO DI NASCITA"] = luogo.upper()
+
     return dati
 
 # === NAVIGAZIONE ===
