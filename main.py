@@ -7,6 +7,7 @@ import datetime
 import os
 import base64
 import numpy as np
+from zoneinfo import ZoneInfo
 
 st.set_page_config(page_title="Controllo Patenti - Guardia di Finanza", layout="centered")
 
@@ -77,6 +78,7 @@ def estrai_dati_patente_easyocr(image_np):
     reader = get_easyocr_reader()
     results = reader.readtext(image_np)
     testo = "\n".join([r[1] for r in results])
+    st.text_area("Testo OCR rilevato (debug)", testo, height=150)
     dati = {"COGNOME": "", "NOME": "", "DATA DI NASCITA": "", "LUOGO DI NASCITA": ""}
     righe = testo.split("\n")
     for riga in righe:
@@ -104,7 +106,7 @@ with tabs[0]:
     comune = st.selectbox("Comune del controllo", COMUNI_CONTROLLABILI)
     if st.button("✅ Avvia controllo"):
         st.session_state.comune = comune
-        st.session_state.inizio_turno = datetime.datetime.now()
+        st.session_state.inizio_turno = datetime.datetime.now(ZoneInfo("Europe/Rome"))
         st.session_state.last_uploaded = None
         st.session_state.comune_attivo = comune
         st.success(f"Controllo iniziato alle {st.session_state.inizio_turno.strftime('%H:%M:%S')} nel comune di {comune}")
@@ -135,7 +137,7 @@ with tabs[1]:
         rilievi_note = st.text_input("Estremi rilievo") if rilievi else "NO"
 
         if st.button("💾 Salva controllo"):
-            orario = datetime.datetime.now()
+            orario = datetime.datetime.now(ZoneInfo("Europe/Rome"))
             st.session_state.registro.append({
                 "COMUNE": st.session_state.comune_attivo,
                 "ORA": orario,
@@ -156,7 +158,7 @@ with tabs[1]:
 with tabs[2]:
     st.header("✅ Fine Posto di Controllo")
     if st.button("🛑 Termina il controllo"):
-        st.session_state.fine_turno = datetime.datetime.now()
+        st.session_state.fine_turno = datetime.datetime.now(ZoneInfo("Europe/Rome"))
         st.session_state.last_uploaded = None
         st.success(f"Controllo terminato alle {st.session_state.fine_turno.strftime('%H:%M:%S')}")
 
