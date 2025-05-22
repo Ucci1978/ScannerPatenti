@@ -6,6 +6,7 @@ import re
 import datetime
 import os
 import base64
+import numpy as np
 
 st.set_page_config(page_title="Controllo Patenti - Guardia di Finanza", layout="centered")
 
@@ -116,7 +117,8 @@ with tabs[1]:
         st.image(st.session_state.last_uploaded, caption="📸 Immagine caricata", use_container_width=True)
         with st.spinner("🧠 Estrazione in corso..."):
             image = Image.open(st.session_state.last_uploaded).convert("RGB")
-            dati = estrai_dati_patente_easyocr(image)
+            image_np = np.array(image)
+            dati = estrai_dati_patente_easyocr(image_np)
 
         cognome = st.text_input("COGNOME", value=dati["COGNOME"])
         nome = st.text_input("NOME", value=dati["NOME"])
