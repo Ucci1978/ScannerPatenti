@@ -1,6 +1,6 @@
 streamlit
 easyocr
+numpy
 Pillow
 pandas
 openpyxl
-numpy
