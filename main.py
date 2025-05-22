@@ -68,10 +68,14 @@ COMUNI_CONTROLLABILI = [
     "VOLTAGGIO", "VIGNOLE BORBERA"
 ]
 
-# === OCR con easyocr ===
-def estrai_dati_patente_easyocr(image):
-    reader = easyocr.Reader(['it'], gpu=False)
-    results = reader.readtext(image)
+# === OCR CON CACHE ===
+@st.cache_resource
+def get_easyocr_reader():
+    return easyocr.Reader(['it'], gpu=False)
+
+def estrai_dati_patente_easyocr(image_np):
+    reader = get_easyocr_reader()
+    results = reader.readtext(image_np)
     testo = "\n".join([r[1] for r in results])
     dati = {"COGNOME": "", "NOME": "", "DATA DI NASCITA": "", "LUOGO DI NASCITA": ""}
     righe = testo.split("\n")
@@ -95,7 +99,6 @@ def estrai_dati_patente_easyocr(image):
 # === NAVIGAZIONE ===
 tabs = st.tabs(["🏁 Inizio", "📝 Inserimento", "✅ Fine", "📊 Report"])
 
-# === TAB 1 ===
 with tabs[0]:
     st.header("🏁 Inizio Posto di Controllo")
     comune = st.selectbox("Comune del controllo", COMUNI_CONTROLLABILI)
@@ -106,7 +109,6 @@ with tabs[0]:
         st.session_state.comune_attivo = comune
         st.success(f"Controllo iniziato alle {st.session_state.inizio_turno.strftime('%H:%M:%S')} nel comune di {comune}")
 
-# === TAB 2 ===
 with tabs[1]:
     st.header("📝 Inserimento Dati")
     uploaded_file = st.file_uploader("Carica immagine patente", type=["png", "jpg", "jpeg"])
@@ -151,7 +153,6 @@ with tabs[1]:
             st.session_state.last_uploaded = None
             st.success("Dati salvati e immagine azzerata.")
 
-# === TAB 3 ===
 with tabs[2]:
     st.header("✅ Fine Posto di Controllo")
     if st.button("🛑 Termina il controllo"):
@@ -159,7 +160,6 @@ with tabs[2]:
         st.session_state.last_uploaded = None
         st.success(f"Controllo terminato alle {st.session_state.fine_turno.strftime('%H:%M:%S')}")
 
-# === TAB 4 ===
 with tabs[3]:
     st.header("📊 Report e Statistiche")
     if len(st.session_state.registro) == 0:
