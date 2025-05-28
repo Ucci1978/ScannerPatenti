@@ -5,11 +5,13 @@ import pytesseract
 import pandas as pd
 import gspread
 import re
-import json
-from io import StringIO
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import base64
+import json
+from io import StringIO
+
+
 
 # Percorso locale a Tesseract
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
