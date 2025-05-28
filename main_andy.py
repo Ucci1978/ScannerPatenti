@@ -23,8 +23,18 @@ st.set_page_config(page_title="AL124 - Guardia di Finanza", layout="wide")
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets",
          "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
 
-service_account_info = json.load(StringIO(st.secrets["google"]["service_account_json"]))
-creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
+try:
+    # Carica il JSON direttamente dalle secrets di Streamlit
+    # La chiave "google_credentials" deve corrispondere a quella usata in secrets.toml / Streamlit Cloud secrets
+    service_account_info = st.secrets["google_credentials"] # <--- CAMBIATO QUI
+    creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
+except KeyError:
+    st.error("Errore: La secret 'google_credentials' non è configurata. Assicurati che il tuo file secrets.toml o Streamlit Cloud secrets sia corretto.")
+    st.stop()
+except Exception as e:
+    st.error(f"Errore durante il caricamento delle credenziali Google Sheets: {e}")
+    st.stop()
+
 client = gspread.authorize(creds)
 sheet = client.open("Controlli_Pattuglia").sheet1
 
