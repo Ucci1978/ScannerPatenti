@@ -1,6 +1,6 @@
-streamlit
-Pillow
-pytesseract
-pandas
-gspread
-google-auth-oauthlib
+streamlit>=1.33.0,<1.46.0  # Forza una versione di Streamlit che abbia st.rerun()
+Pillow>=10.0.0            # Versioni recenti
+pytesseract>=0.3.10
+pandas>=2.0.0
+gspread>=6.0.0
+google-auth-oauthlib>=1.2.0 # Questa l'avevo omessa, è importante se la usi
