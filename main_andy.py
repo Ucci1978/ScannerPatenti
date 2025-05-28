@@ -136,6 +136,7 @@ if "df_controlli" not in st.session_state: # Inizializza anche questo per le sta
 tabs = st.tabs(["📍START SOFFERMO", "📥 DATI SOGGETTO", "🔁STOP SOFFERMO", "📋STATISTICA"])
 
 # === TABS 1: START SOFFERMO ===
+# === TABS 1: START SOFFERMO ===
 with tabs[0]:
     st.header("📍INIZIA IL POSTO DI CONTROLLO")
     
@@ -147,18 +148,24 @@ with tabs[0]:
         "PARODI LIGURE", "PASTURANA", "POZZOLO FORMIGARO", "ROCCAFORTE LIGURE", "ROCCHETTA LIGURE",
         "SAN CRISTOFORO", "SERRAVALLE SCRIVIA", "SILVANO D'ORBA", "STAZZANO", "TASSAROLO",
         "VOLTAGGIO", "VIGNOLE BORBERA"
-    ], key="select_comune_start") # Aggiunto key
+    ], key="select_comune_start")
+
+    # Metti un placeholder per il messaggio di successo, in modo che sia visibile
+    # anche dopo il rerun, se l'app si ricarica per altre ragioni.
+    success_message_placeholder = st.empty() 
 
     if st.button("🔴 INIZIA SOFFERMO", key="start_soffermo_button"):
         st.session_state["comune_corrente"] = comune_selezionato
         st.session_state["inizio_turno"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-        st.success(f"Inizio soffermo nel comune di **{st.session_state['comune_corrente']}** alle **{st.session_state['inizio_turno']}**")
-        st.experimental_rerun() 
+        success_message_placeholder.success(f"Inizio soffermo nel comune di **{st.session_state['comune_corrente']}** alle **{st.session_state['inizio_turno']}**")
+        # Rimuovi o commenta la riga st.experimental_rerun() QUI:
+        # st.experimental_rerun() # <--- RIMUOVERLA O COMMENTARLA!
     
+    # Questo blocco viene eseguito ad ogni rerun
+    # Potresti anche spostare questo blocco *dopo* il pulsante se vuoi che appaia solo
+    # dopo che un comune è stato effettivamente selezionato.
     if st.session_state.get("comune_corrente", "NON DEFINITO") != "NON DEFINITO":
         st.info(f"Soffermo attualmente in corso a **{st.session_state['comune_corrente']}** (Iniziato alle {st.session_state['inizio_turno']})")
-
-
 # === TABS 2: DATI SOGGETTO ===
 with tabs[1]:
     st.header("📥 INSERIMENTO DATI CONTROLLO")
