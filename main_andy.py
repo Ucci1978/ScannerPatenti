@@ -142,7 +142,7 @@ if "df_controlli" not in st.session_state: # Inizializza anche questo per le sta
 tabs = st.tabs(["📍START SOFFERMO", "📥 DATI SOGGETTO", "🔁STOP SOFFERMO", "📋STATISTICA"])
 
 # === TABS 1: START SOFFERMO ===
-with with tabs[0]:
+with tabs[0]:
     st.header("📍INIZIA IL POSTO DI CONTROLLO")
     
     comuni_lista = [
