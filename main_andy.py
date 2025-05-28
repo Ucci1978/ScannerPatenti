@@ -187,7 +187,7 @@ with tabs[0]:
         st.session_state["comune_corrente"] = comune_selezionato
         st.session_state["inizio_turno"] = datetime.now().strftime("%d/%m/%Y %H:%M")
         success_message_placeholder.success(f"Inizio soffermo nel comune di **{st.session_state['comune_corrente']}** alle **{st.session_state['inizio_turno']}**")
-        st.experimental_rerun() 
+        st.rerun() 
     # ====================================================================================================
 
     # Mostra lo stato corrente del soffermo
@@ -300,7 +300,7 @@ with tabs[2]:
             st.session_state["comune_corrente"] = "NON DEFINITO"
             st.session_state["inizio_turno"] = ""
             st.success("Sessione di controllo TERMINATA.")
-            st.experimental_rerun()
+            st.rerun()
     else:
         st.info("Nessun posto di controllo attivo.")
 
