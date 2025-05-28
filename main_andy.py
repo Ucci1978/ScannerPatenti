@@ -11,7 +11,7 @@ import json # Assicurati che json sia importato
 # Percorso locale a Tesseract (da commentare o rimuovere per il deployment)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-# --- DEBUG: Inizio script ---
+# --# --- DEBUG: Inizio script ---
 st.write(f"DEBUG: Inizio esecuzione script. Comune corrente: {st.session_state.get('comune_corrente', 'NON INIZIALIZZATO')}")
 if "select_comune_start" in st.session_state:
     st.write(f"DEBUG: st.session_state['select_comune_start'] = {st.session_state['select_comune_start']}")
@@ -142,7 +142,7 @@ if "df_controlli" not in st.session_state: # Inizializza anche questo per le sta
 tabs = st.tabs(["📍START SOFFERMO", "📥 DATI SOGGETTO", "🔁STOP SOFFERMO", "📋STATISTICA"])
 
 # === TABS 1: START SOFFERMO ===
-with tabs[0]:
+with with tabs[0]:
     st.header("📍INIZIA IL POSTO DI CONTROLLO")
     
     comuni_lista = [
@@ -155,46 +155,21 @@ with tabs[0]:
         "VOLTAGGIO", "VIGNOLE BORBERA"
     ]
     
-    # === DEBUG: Per testare se la selectbox funziona in isolamento ===
-    # Prova a impostare un valore predefinito che sai essere valido
-    # default_index = comuni_lista.index(st.session_state.get("comune_corrente", "ALBERA LIGURE")) if st.session_state.get("comune_corrente", "ALBERA LIGURE") in comuni_lista else 0
-    
-    # La riga successiva è la selectbox originale, ma con un valore predefinito impostato
-    # in base a st.session_state['comune_corrente'] per garantire la persistenza.
-    # È cruciale che il valore predefinito sia uno dei `options`.
-    # Il valore predefinito per st.selectbox è il primo elemento della lista `options` (indice 0)
-    # Se vuoi che mantenga il valore selezionato precedentemente:
+    # --- NUOVO DEBUG: Stampa la lista dei comuni e la sua lunghezza ---
+    st.write(f"DEBUG: comuni_lista (lunghezza {len(comuni_lista)}): {comuni_lista}")
+    # --- FINE NUOVO DEBUG ---
+
     current_comune_index = 0
     if st.session_state.get("comune_corrente") and st.session_state["comune_corrente"] in comuni_lista:
         current_comune_index = comuni_lista.index(st.session_state["comune_corrente"])
 
     comune_selezionato = st.selectbox(
         "Seleziona Comune del controllo", 
-        options=comuni_lista, 
-        index=current_comune_index, # Usa l'indice del comune corrente come predefinito
+        options=comuni_lista, # Passa la lista esplicitamente
+        index=current_comune_index, 
         key="select_comune_start"
     )
 
-    # --- DEBUG: Valore della selectbox dopo la selezione ---
-    st.write(f"DEBUG: Valore attuale di comune_selezionato (dopo selectbox): {comune_selezionato}")
-    # --- FINE DEBUG ---
-
-    success_message_placeholder = st.empty() 
-
-    if st.button("🔴 INIZIA SOFFERMO", key="start_soffermo_button"):
-        st.session_state["comune_corrente"] = comune_selezionato
-        st.session_state["inizio_turno"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-        success_message_placeholder.success(f"Inizio soffermo nel comune di **{st.session_state['comune_corrente']}** alle **{st.session_state['inizio_turno']}**")
-        # NON RIMETTERE st.experimental_rerun() QUI!
-    
-    # Questo blocco viene eseguito ad ogni rerun
-    # Questo è il messaggio che ti mostra il comune corrente.
-    # Mettiamo un controllo più robusto per evitarlo se non è ancora definito.
-    if st.session_state.get("comune_corrente") and st.session_state["comune_corrente"] != "NON DEFINITO":
-        st.info(f"Soffermo attualmente in corso a **{st.session_state['comune_corrente']}** (Iniziato alle {st.session_state['inizio_turno']})")
-    else:
-        st.info("Nessun soffermo attivo. Seleziona un comune e clicca 'INIZIA SOFFERMO'.")
-        
 # === TABS 2: DATI SOGGETTO ===
 with tabs[1]:
     st.header("📥 INSERIMENTO DATI CONTROLLO")
