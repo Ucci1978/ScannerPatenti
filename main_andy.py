@@ -14,7 +14,7 @@ import json # Assicurati che json sia importato
 # === CONFIG ===
 st.set_page_config(page_title="AL124 - Guardia di Finanza", layout="wide")
 
-# --# --- DEBUG: Inizio script ---
+# --- DEBUG: Inizio script ---
 st.write(f"DEBUG: Inizio esecuzione script. Comune corrente: {st.session_state.get('comune_corrente', 'NON INIZIALIZZATO')}")
 if "select_comune_start" in st.session_state:
     st.write(f"DEBUG: st.session_state['select_comune_start'] = {st.session_state['select_comune_start']}")
@@ -138,6 +138,14 @@ if "dati_precompilati" not in st.session_state:
 if "df_controlli" not in st.session_state: # Inizializza anche questo per le statistiche
     st.session_state["df_controlli"] = pd.DataFrame(columns=COLUMNS)
 
+# ================================================================
+# TEST ISOLATO DEL PULSANTE: METTIAMO UN PULSANTE QUI FUORI DALLE TAB
+# PER VEDERE SE VIENE RENDERIZZATO IN ASSOLUTO
+# ================================================================
+if st.button("TEST BUTTON - DEVE APPARIRE!", key="test_button_global"):
+    st.write("DEBUG: Test button clicked!")
+# ================================================================
+
 # === INTERFACCIA CON SCHEDE ===
 tabs = st.tabs(["📍START SOFFERMO", "📥 DATI SOGGETTO", "🔁STOP SOFFERMO", "📋STATISTICA"])
 
@@ -154,12 +162,10 @@ with tabs[0]:
         "SAN CRISTOFORO", "SERRAVALLE SCRIVIA", "SILVANO D'ORBA", "STAZZANO", "TASSAROLO",
         "VOLTAGGIO", "VIGNOLE BORBERA"
     ]
-    
     # --- DEBUG: Stampa la lista dei comuni ---
     st.write(f"DEBUG: comuni_lista (lunghezza {len(comuni_lista)}): {comuni_lista}")
 
     current_comune_index = 0
-    # Assicurati che 'comune_corrente' sia nel session_state e nella lista per impostare l'indice
     if st.session_state.get("comune_corrente") and st.session_state["comune_corrente"] in comuni_lista:
         current_comune_index = comuni_lista.index(st.session_state["comune_corrente"])
 
@@ -170,32 +176,26 @@ with tabs[0]:
         key="select_comune_start"
     )
 
-    # --- DEBUG: Valore della selectbox dopo la selezione ---
     st.write(f"DEBUG: Valore attuale di comune_selezionato (dopo selectbox): {comune_selezionato}")
 
-    # Variabile per il messaggio di successo, per evitare che scompaia subito
     success_message_placeholder = st.empty() 
 
     # ====================================================================================================
-    # RIMETTI QUESTO BLOCCO - QUESTO È IL PULSANTE CHE SERVE PER INIZIARE IL SOFFERMO
+    # IL TUO PULSANTE ORIGINALE
     # ====================================================================================================
     if st.button("🔴 INIZIA SOFFERMO", key="start_soffermo_button"):
         st.session_state["comune_corrente"] = comune_selezionato
         st.session_state["inizio_turno"] = datetime.now().strftime("%d/%m/%Y %H:%M")
         success_message_placeholder.success(f"Inizio soffermo nel comune di **{st.session_state['comune_corrente']}** alle **{st.session_state['inizio_turno']}**")
-        
-        # Dopo aver impostato il comune, ricarichiamo la pagina per mostrare i cambiamenti
-        # e per forzare l'aggiornamento della tab "Dati Soggetto"
         st.experimental_rerun() 
     # ====================================================================================================
 
-    # Questo blocco viene eseguito ad ogni rerun
     # Mostra lo stato corrente del soffermo
     if st.session_state.get("comune_corrente") and st.session_state["comune_corrente"] != "NON DEFINITO":
         st.info(f"Soffermo attualmente in corso a **{st.session_state['comune_corrente']}** (Iniziato alle {st.session_state['inizio_turno']})")
     else:
         st.info("Nessun soffermo attivo. Seleziona un comune e clicca 'INIZIA SOFFERMO'.")
-        
+
 # === TABS 2: DATI SOGGETTO ===
 with tabs[1]:
     st.header("📥 INSERIMENTO DATI CONTROLLO")
