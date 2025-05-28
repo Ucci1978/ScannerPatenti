@@ -11,14 +11,14 @@ import json # Assicurati che json sia importato
 # Percorso locale a Tesseract (da commentare o rimuovere per il deployment)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
+# === CONFIG ===
+st.set_page_config(page_title="AL124 - Guardia di Finanza", layout="wide")
+
 # --# --- DEBUG: Inizio script ---
 st.write(f"DEBUG: Inizio esecuzione script. Comune corrente: {st.session_state.get('comune_corrente', 'NON INIZIALIZZATO')}")
 if "select_comune_start" in st.session_state:
     st.write(f"DEBUG: st.session_state['select_comune_start'] = {st.session_state['select_comune_start']}")
 # --- FINE DEBUG ---
-
-# === CONFIG ===
-st.set_page_config(page_title="AL124 - Guardia di Finanza", layout="wide")
 
 # === GOOGLE SHEET SETUP ===
 scope = [
