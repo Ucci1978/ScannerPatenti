@@ -225,13 +225,13 @@ with tabs[1]:
         # Ho aggiunto .upper() direttamente sul valore del text_input
         col_cognome, col_nome = st.columns(2)
         with col_cognome:
-            cognome_input = st.text_input("Cognome", value=st.session_state.get('dati_precompilati', {}).get('COGNOME', '')).upper(), key="cognome_input")
+            cognome_input = st.text_input("Cognome", value=st.session_state.get('dati_precompilati', {}).get('COGNOME', '')).upper()
         with col_nome:
-            nome_input = st.text_input("Nome", value=st.session_state.get('dati_precompilati', {}).get('NOME', '')).upper(), key="nome_input")
+            nome_input = st.text_input("Nome", value=st.session_state.get('dati_precompilati', {}).get('NOME', '')).upper()
 
         col_luogo_nascita, col_data_nascita = st.columns(2)
         with col_luogo_nascita:
-            luogo_nascita_input = st.text_input("Luogo di Nascita", value=st.session_state.get('dati_precompilati', {}).get('LUOGO_NASCITA', '')).upper(), key="luogo_nascita_input")
+            luogo_nascita_input = st.text_input("Luogo di Nascita", value=st.session_state.get('dati_precompilati', {}).get('LUOGO_NASCITA', '')).upper()
         with col_data_nascita:
             data_nascita_input = st.text_input("Data di Nascita (GG/MM/AAAA)", value=st.session_state.get('dati_precompilati', {}).get('DATA_NASCITA', ''), key="data_nascita_input")
 
