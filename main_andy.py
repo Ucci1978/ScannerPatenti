@@ -40,13 +40,13 @@ try:
     sheet = client.open("Controlli_Pattuglia").sheet1
 except KeyError:
     st.error("Errore: La secret 'google_service_account_json' non è configurata o ha un nome errato. Verifica le tue Streamlit secrets.")
-    st.stop()
+    #st.stop()
 except json.JSONDecodeError as e:
     st.error(f"Errore di decodifica JSON delle credenziali Google Sheets: {e}. Questo significa che il contenuto della secret non è un JSON valido. Controlla la formattazione, inclusi gli a capo e gli spazi.")
-    st.stop()
+    #st.stop()
 except Exception as e:
     st.error(f"Errore generico durante l'autorizzazione di Google Sheets: {e}")
-    st.stop()
+    #st.stop()
 
 
 # === STYLE / LOGO / BANNER ===
