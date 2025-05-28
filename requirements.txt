@@ -1,0 +1,6 @@
+streamlit
+Pillow
+pytesseract
+pandas
+gspread
+google-auth-oauthlib
