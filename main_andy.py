@@ -24,19 +24,26 @@ scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/au
          "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
 
 try:
-    # Carica il JSON direttamente dalle secrets di Streamlit
-    # La chiave "google_credentials" deve corrispondere a quella usata in secrets.toml / Streamlit Cloud secrets
-    service_account_info = st.secrets["google_credentials"] # <--- CAMBIATO QUI
+    # Accesso diretto al secret che contiene la stringa JSON
+    # Il nome del secret deve corrispondere esattamente a quello usato nel file secrets.toml o nella pagina secrets di Streamlit Cloud
+    creds_json_string = st.secrets["google_service_account_json"] # <--- HO RINOMINATO LA CHIAVE PER CHIAREZZA
+
+    # Ora parsifica questa stringa JSON in un dizionario Python
+    service_account_info = json.loads(creds_json_string) # json.loads() per stringhe
+    
     creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
+    client = gspread.authorize(creds)
+    sheet = client.open("Controlli_Pattuglia").sheet1
 except KeyError:
-    st.error("Errore: La secret 'google_credentials' non è configurata. Assicurati che il tuo file secrets.toml o Streamlit Cloud secrets sia corretto.")
+    st.error("Errore: La secret 'google_service_account_json' non è configurata o ha un nome errato. Verifica le tue Streamlit secrets.")
+    st.stop()
+except json.JSONDecodeError as e:
+    st.error(f"Errore di decodifica JSON nelle credenziali Google Sheets: {e}. Controlla la formattazione del JSON nel secret.")
     st.stop()
 except Exception as e:
-    st.error(f"Errore durante il caricamento delle credenziali Google Sheets: {e}")
+    st.error(f"Errore generico durante l'autorizzazione di Google Sheets: {e}")
     st.stop()
 
-client = gspread.authorize(creds)
-sheet = client.open("Controlli_Pattuglia").sheet1
 
 # === STYLE / LOGO / BANNER ===
 def show_banner():
@@ -97,19 +104,22 @@ tabs = st.tabs(["📍START SOFFERMO", "📥 DATI SOGGETTO",  "🔁STOP SOFFERMO"
 # === TABS 1 ===
 with tabs[0]:
     st.header("📍INIZIA IL POSTO DI CONTROLLO")
-    comune = st.selectbox("Seleziona Comune del controllo", [
-        "ALBERA LIGURE", "ARQUATA SCRIVIA", "BASALUZZO", "BORGHETTO DI BORBERA", "BOSIO",
-        "CABELLA LIGURE", "CANTALUPO LIGURE", "CAPRIATA D'ORBA", "CARREGA LIGURE", "CARROSIO",
-        "CASALEGGIO BOIRO", "CASTELLETTO D'ORBA", "FRACONALTO", "FRANCAVILLA BISIO", "GAVI",
-        "GRONDONA", "LERMA", "MONGIARDINO LIGURE", "MONTALDEO", "MORNESE", "NOVI LIGURE",
-        "PARODI LIGURE", "PASTURANA", "POZZOLO FORMIGARO", "ROCCAFORTE LIGURE", "ROCCHETTA LIGURE",
-        "SAN CRISTOFORO", "SERRAVALLE SCRIVIA", "SILVANO D'ORBA", "STAZZANO", "TASSAROLO",
-        "VOLTAGGIO", "VIGNOLE BORBERA"
-    ])
-    if st.tabs("📍START SOFFERMO"):
-        st.session_state["comune_corrente"] = comune
+
+    comune_selezionato = st.selectbox("Seleziona Comune del controllo", [
+        # ... lista comuni ...
+    ], key="select_comune") # Aggiunto key per evitare errori se hai più selectbox
+
+    # Aggiungi un bottone per iniziare il soffermo
+    if st.button("🔴 INIZIA SOFFERMO", key="start_soffermo_button"):
+        st.session_state["comune_corrente"] = comune_selezionato
         st.session_state["inizio_turno"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-        st.success(f"Inizio soffermo nel comune di {comune} alle {st.session_state['inizio_turno']}")
+        st.success(f"Inizio soffermo nel comune di **{st.session_state['comune_corrente']}** alle **{st.session_state['inizio_turno']}**")
+        # Opzionale: ricarica la pagina per aggiornare lo stato mostrato altrove
+        st.experimental_rerun() 
+
+    # Mostra lo stato corrente se un soffermo è attivo
+    if st.session_state.get("comune_corrente", "NON DEFINITO") != "NON DEFINITO":
+        st.info(f"Soffermo attualmente in corso a **{st.session_state['comune_corrente']}** (Iniziato alle {st.session_state['inizio_turno']})")
 
 # === TABS 2 ===
 with tabs[1]:
@@ -157,15 +167,23 @@ with tabs[1]:
 # === TABS 3 ===
 with tabs[2]:
     st.header("🔁STOP SOFFERMO")
-    ora_fine = datetime.now().strftime("%d/%m/%Y %H:%M")
-    comune = st.session_state.get("comune_corrente", "NON DEFINITO")
-    ora_inizio = st.session_state.get("inizio_turno", "NON DEFINITA")
-    st.success(f"✅ Il controllo nel comune di {comune} è terminato il {ora_fine}")
-    st.info(f"⏱️ Orario del controllo: dalle {ora_inizio} alle {ora_fine}")
-    if st.tabs("🔁STOP SOFFERMO"):
-        st.session_state["comune_corrente"] = ""
-        st.session_state["inizio_turno"] = ""
-        st.success("Sessione TERMINATA.")
+
+    # Mostra lo stato attuale del soffermo
+    if st.session_state.get("comune_corrente", "NON DEFINITO") != "NON DEFINITO":
+        st.info(f"Il controllo è attualmente in corso nel comune di **{st.session_state['comune_corrente']}** (Iniziato alle {st.session_state['inizio_turno']})")
+
+        # Aggiungi un bottone per confermare la fine del soffermo
+        if st.button("✅ CONFERMA FINE SOFFERMO", key="stop_soffermo_button"):
+            ora_fine = datetime.now().strftime("%d/%m/%Y %H:%M")
+            st.success(f"✅ Il controllo nel comune di **{st.session_state['comune_corrente']}** è terminato il **{ora_fine}**")
+            st.info(f"⏱️ Orario del controllo: dalle **{st.session_state['inizio_turno']}** alle **{ora_fine}**")
+            # Resetta lo stato della sessione
+            st.session_state["comune_corrente"] = "NON DEFINITO"
+            st.session_state["inizio_turno"] = ""
+            st.success("Sessione di controllo TERMINATA.")
+            st.experimental_rerun() # Ricarica per pulire i messaggi e lo stato
+    else:
+        st.info("Nessun posto di controllo attivo.")
 
 # === TABS 4 ===
 with tabs[3]:
