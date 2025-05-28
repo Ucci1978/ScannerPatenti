@@ -5,6 +5,8 @@ import pytesseract
 import pandas as pd
 import gspread
 import re
+import json
+from io import StringIO
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import base64
@@ -19,7 +21,8 @@ st.set_page_config(page_title="AL124 - Guardia di Finanza", layout="wide")
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets",
          "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
 
-creds = Credentials.from_service_account_file("scannerpatenti-470044eb6405.json", scopes=scope)
+service_account_info = json.load(StringIO(st.secrets["google"]["service_account_json"]))
+creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
 client = gspread.authorize(creds)
 sheet = client.open("Controlli_Pattuglia").sheet1
 
