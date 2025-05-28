@@ -155,21 +155,47 @@ with tabs[0]:
         "VOLTAGGIO", "VIGNOLE BORBERA"
     ]
     
-    # --- NUOVO DEBUG: Stampa la lista dei comuni e la sua lunghezza ---
+    # --- DEBUG: Stampa la lista dei comuni ---
     st.write(f"DEBUG: comuni_lista (lunghezza {len(comuni_lista)}): {comuni_lista}")
-    # --- FINE NUOVO DEBUG ---
 
     current_comune_index = 0
+    # Assicurati che 'comune_corrente' sia nel session_state e nella lista per impostare l'indice
     if st.session_state.get("comune_corrente") and st.session_state["comune_corrente"] in comuni_lista:
         current_comune_index = comuni_lista.index(st.session_state["comune_corrente"])
 
     comune_selezionato = st.selectbox(
         "Seleziona Comune del controllo", 
-        options=comuni_lista, # Passa la lista esplicitamente
+        options=comuni_lista, 
         index=current_comune_index, 
         key="select_comune_start"
     )
 
+    # --- DEBUG: Valore della selectbox dopo la selezione ---
+    st.write(f"DEBUG: Valore attuale di comune_selezionato (dopo selectbox): {comune_selezionato}")
+
+    # Variabile per il messaggio di successo, per evitare che scompaia subito
+    success_message_placeholder = st.empty() 
+
+    # ====================================================================================================
+    # RIMETTI QUESTO BLOCCO - QUESTO È IL PULSANTE CHE SERVE PER INIZIARE IL SOFFERMO
+    # ====================================================================================================
+    if st.button("🔴 INIZIA SOFFERMO", key="start_soffermo_button"):
+        st.session_state["comune_corrente"] = comune_selezionato
+        st.session_state["inizio_turno"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+        success_message_placeholder.success(f"Inizio soffermo nel comune di **{st.session_state['comune_corrente']}** alle **{st.session_state['inizio_turno']}**")
+        
+        # Dopo aver impostato il comune, ricarichiamo la pagina per mostrare i cambiamenti
+        # e per forzare l'aggiornamento della tab "Dati Soggetto"
+        st.experimental_rerun() 
+    # ====================================================================================================
+
+    # Questo blocco viene eseguito ad ogni rerun
+    # Mostra lo stato corrente del soffermo
+    if st.session_state.get("comune_corrente") and st.session_state["comune_corrente"] != "NON DEFINITO":
+        st.info(f"Soffermo attualmente in corso a **{st.session_state['comune_corrente']}** (Iniziato alle {st.session_state['inizio_turno']})")
+    else:
+        st.info("Nessun soffermo attivo. Seleziona un comune e clicca 'INIZIA SOFFERMO'.")
+        
 # === TABS 2: DATI SOGGETTO ===
 with tabs[1]:
     st.header("📥 INSERIMENTO DATI CONTROLLO")
