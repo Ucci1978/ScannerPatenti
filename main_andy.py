@@ -55,7 +55,7 @@ except Exception as e:
 def show_banner():
     # Per un deployment, assicurati che 'sfondo.png' sia accessibile (es. nella stessa cartella del main_andy.py)
     try:
-        st.image("sfondo.png", use_column_width=True) # use_column_width è più flessibile di use_container_width
+        st.image("sfondo.png", use_container_width=True) # use_column_width è più flessibile di use_container_width
     except FileNotFoundError:
         st.warning("File 'sfondo.png' non trovato. Assicurati che sia nel tuo repository.")
     
