@@ -7,6 +7,8 @@ import re
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import json # Assicurati che json sia importato
+import io # <-- AGGIUNGI QUESTO
+import pillow_heif # <-- AGGIUNGI QUESTO
 
 # Percorso locale a Tesseract (da commentare o rimuovere per il deployment)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
@@ -232,8 +234,40 @@ with tabs[1]:
         uploaded_file = st.file_uploader("📸 Carica foto del documento", type=["jpg", "jpeg", "png"], key="upload_document_file")
         
         if uploaded_file:
-            st.image(uploaded_file, caption="Documento caricato", use_container_width=True)
-            image = Image.open(uploaded_file)
+             st.image(uploaded_file, caption="Documento caricato", use_container_width=True)
+
+            # --- INIZIO NUOVO CODICE PER GESTIONE HEIC ---
+            # Controlla l'estensione del file
+            file_extension = uploaded_file.name.split('.')[-1].lower()
+
+            if file_extension == 'heic' or file_extension == 'heif':
+                try:
+                    # Carica l'immagine HEIC
+                    heif_file = pillow_heif.read_heif(uploaded_file)
+                    # Converti in immagine PIL (RGB è un buon formato per Tesseract)
+                    image = Image.frombytes(
+                        heif_file.mode,
+                        heif_file.size,
+                        heif_file.data,
+                        "raw",
+                        heif_file.mode,
+                        heif_file.stride,
+                    )
+                    # Se l'immagine ha un canale alfa (RGBA), convertila in RGB
+                    if image.mode == 'RGBA':
+                        image = image.convert('RGB')
+                except Exception as e:
+                    st.error(f"Errore nella conversione dell'immagine HEIC: {e}. Assicurati che l'immagine sia valida.")
+                    st.stop() # Ferma l'esecuzione se c'è un errore grave
+            else:
+            # Per gli altri formati (JPG, PNG, ecc.), usa il metodo standard
+                try:
+                    image = Image.open(uploaded_file)
+                    if image.mode == 'RGBA': # Anche qui, converti se necessario
+                        image = image.convert('RGB')
+                except Exception as e:
+                    st.error(f"Errore nell'apertura dell'immagine: {e}. Assicurati che il file sia un'immagine valida.")
+                    st.stop()
             
             with st.spinner("Estrazione dati in corso..."):
                 try:
