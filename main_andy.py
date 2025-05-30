@@ -6,23 +6,26 @@ import gspread
 import re
 from google.oauth2.service_account import Credentials
 from datetime import datetime
-import json # Assicurati che json sia importato
-import io # <-- AGGIUNGI QUESTO
-import pillow_heif # <-- AGGIUNGI QUESTO
+import json
+import io
+import pillow_heif
 
-# Percorso locale a Tesseract (da commentare o rimuovere per il deployment)
+# Registra il lettore HEIC (necessario per Pillow)
+pillow_heif.register_heif_opener()
+
+# Percorso locale a Tesseract (LASCIAMO COMMENTATO PER IL DEPLOYMENT SU STREAMLIT CLOUD)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-# === CONFIG ===
-st.set_page_config(page_title="AL124 - Guardia di Finanza", layout="wide")
-
-# --- DEBUG: Inizio script ---
-#st.write(f"DEBUG: Inizio esecuzione script. Comune corrente: {st.session_state.get('comune_corrente', 'NON INIZIALIZZATO')}")
-#if "select_comune_start" in st.session_state:
-#    st.write(f"DEBUG: st.session_state['select_comune_start'] = {st.session_state['select_comune_start']}")
-# --- FINE DEBUG ---
+# === CONFIGURAZIONE PAGINA STREAMLIT ===
+st.set_page_config(
+    page_title="Scanner Patenti - GdF",
+    page_icon="👮‍♂️", # Icona che appare nella tab del browser
+    layout="centered", # 'centered' è solitamente migliore per mobile, 'wide' per desktop
+    initial_sidebar_state="collapsed" # Per mantenere la sidebar nascosta all'inizio
+)
 
 # === GOOGLE SHEET SETUP ===
+# Le tue credenziali e la configurazione di gspread
 scope = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/spreadsheets",
@@ -31,43 +34,42 @@ scope = [
 ]
 
 try:
-    # RECUPERA LA STRINGA DALLE SECRETS (È UNA STRINGA, NON UN DIZIONARIO)
-    creds_json_string = st.secrets["google_service_account_json"] 
-    
-    # PARSIFICA LA STRINGA IN UN DIZIONARIO PYTHON
-    service_account_info = json.loads(creds_json_string) 
-    
+    creds_json_string = st.secrets["google_service_account_json"]
+    service_account_info = json.loads(creds_json_string)
     creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
     client = gspread.authorize(creds)
+    # Assicurati che "Controlli_Pattuglia" sia il nome corretto del tuo Google Sheet
+    # e che sheet1 sia la scheda corretta.
     sheet = client.open("Controlli_Pattuglia").sheet1
 except KeyError:
     st.error("Errore: La secret 'google_service_account_json' non è configurata o ha un nome errato. Verifica le tue Streamlit secrets.")
-    #st.stop()
+    # st.stop() # Commentato per permettere all'app di caricare anche senza credenziali, ma con errore visibile
 except json.JSONDecodeError as e:
-    st.error(f"Errore di decodifica JSON delle credenziali Google Sheets: {e}. Questo significa che il contenuto della secret non è un JSON valido. Controlla la formattazione, inclusi gli a capo e gli spazi.")
-    #st.stop()
+    st.error(f"Errore di decodifica JSON delle credenziali Google Sheets: {e}. Controlla la formattazione della secret.")
+    # st.stop()
 except Exception as e:
-    st.error(f"Errore generico durante l'autorizzazione di Google Sheets: {e}")
-    #st.stop()
+    st.error(f"Errore generico durante l'autorizzazione di Google Sheets: {e}. Controlla la connessione o i permessi.")
+    # st.stop()
 
-
-# === STYLE / LOGO / BANNER ===
+# === FUNZIONE BANNER (se 'sfondo.png' è un file locale, assicurati che sia nel repository) ===
 def show_banner():
-    # Per deployment, assicurati che 'sfondo.png' sia accessibile (es. nella stessa cartella)
-    st.image("sfondo.png", use_container_width=True)
-
+    # Per un deployment, assicurati che 'sfondo.png' sia accessibile (es. nella stessa cartella del main_andy.py)
+    try:
+        st.image("sfondo.png", use_column_width=True) # use_column_width è più flessibile di use_container_width
+    except FileNotFoundError:
+        st.warning("File 'sfondo.png' non trovato. Assicurati che sia nel tuo repository.")
+    
     st.markdown("""
     <style>
     .main {
-        background-color: #1e1e1e;
-        color: white;
+        background-color: #1e1e1e; /* Il tuo colore di sfondo attuale */
+        color: white; /* Colore testo principale */
     }
+    /* Puoi aggiungere più CSS qui per personalizzare ulteriormente */
     </style>
     """, unsafe_allow_html=True)
 
-show_banner()
-
-# === FUNZIONI ===
+# === FUNZIONI PER L'ESTRAZIONE E IL SALVATAGGIO DEI DATI ===
 def estrai_dati_patente(testo):
     righe = [r.strip() for r in testo.split("\n") if r.strip()]
     dati = {
@@ -78,20 +80,26 @@ def estrai_dati_patente(testo):
     }
 
     # Tentativo 1: Regex per trovare i campi più comuni sulle patenti italiane
+    # Ho semplificato un po' le regex, controlla che funzionino con i tuoi campioni
     for r in righe:
-        match_cognome = re.search(r"1\.\s*([A-Z\s]+)", r, re.IGNORECASE)
+        # La regex cerca "1." seguito da spazio opzionale e poi cattura il testo
+        match_cognome = re.search(r"1\.\s*([A-Z\s.,]+)", r, re.IGNORECASE)
         if match_cognome and not dati["COGNOME"]:
             dati["COGNOME"] = match_cognome.group(1).strip()
             continue
 
-        match_nome = re.search(r"2\.\s*([A-Z\s]+)", r, re.IGNORECASE)
+        # La regex cerca "2." seguito da spazio opzionale e poi cattura il testo
+        match_nome = re.search(r"2\.\s*([A-Z\s.,]+)", r, re.IGNORECASE)
         if match_nome and not dati["NOME"]:
             dati["NOME"] = match_nome.group(1).strip()
             continue
         
+        # Regex per data e luogo di nascita (cerca "3." seguito da data e testo)
+        # La data è abbastanza flessibile (GG.MM.AAAA, GG/MM/AAAA, GG-MM-AAAA)
+        # E cattura tutto il resto come luogo di nascita
         match_data_luogo = re.search(r"3\.\s*(\d{2}[./-]\d{2}[./-]\d{2,4})\s*(\S.+)", r, re.IGNORECASE)
         if match_data_luogo and not dati["DATA_NASCITA"]:
-            dati["DATA_NASCITA"] = match_data_luogo.group(1).replace('/', '.') # Uniforma il separatore
+            dati["DATA_NASCITA"] = match_data_luogo.group(1).replace('/', '.').replace('-', '.') # Uniforma il separatore
             dati["LUOGO_NASCITA"] = match_data_luogo.group(2).strip()
             continue
     
@@ -108,52 +116,58 @@ def get_current_data_from_sheet():
     
     header_row_index = -1
     for i, row in enumerate(data_raw):
+        # Cerca l'intestazione DATA_ORA in modo case-insensitive e strip
         if "DATA_ORA" in [c.strip().upper() for c in row]:
             header_row_index = i
             break
     
     if header_row_index == -1:
-        st.warning("Impossibile trovare le intestazioni nel foglio Google. Verificare il formato.")
+        st.warning("Impossibile trovare le intestazioni nel foglio Google. Verificare il formato o il nome della colonna 'DATA_ORA'.")
         return pd.DataFrame(columns=COLUMNS)
     
     headers = [c.strip().upper() for c in data_raw[header_row_index]]
     data_rows = data_raw[header_row_index + 1:]
     
+    # Filtra righe vuote
     data_rows = [r for r in data_rows if any(cell.strip() for cell in r)]
 
-    df = pd.DataFrame(data_rows, columns=headers)
+    # Crea DataFrame, gestendo il caso di colonne non corrispondenti se il DataFrame è vuoto
+    if data_rows and len(headers) == len(data_rows[0]):
+        df = pd.DataFrame(data_rows, columns=headers)
+    else:
+        st.warning("I dati recuperati non corrispondono alle intestazioni previste o sono vuoti.")
+        df = pd.DataFrame(columns=headers if headers else COLUMNS) # Usa le intestazioni trovate o COLUMNS come fallback
+        
     return df
 
-
+# === DEFINIZIONE COLONNE DEL FOGLIO GOOGLE ===
 COLUMNS = [
     "DATA_ORA", "COMUNE", "VEICOLO", "TARGA", "COGNOME", "NOME",
     "LUOGO_NASCITA", "DATA_NASCITA", "COMMERCIALE", "COPE", "RILIEVI", "CINOFILI"
 ]
 
-# Inizializzazione degli stati di sessione se non esistono
+# === INIZIALIZZAZIONE STATI DI SESSIONE ===
+# Gli stati di sessione sono fondamentali per mantenere i dati tra i rerun di Streamlit
 if "comune_corrente" not in st.session_state:
     st.session_state["comune_corrente"] = "NON DEFINITO"
 if "inizio_turno" not in st.session_state:
     st.session_state["inizio_turno"] = ""
 if "dati_precompilati" not in st.session_state:
-    st.session_state["dati_precompilati"] = {}
+    st.session_state["dati_precompilati"] = {k: "" for k in COLUMNS} # Inizializza con chiavi vuote
 if "df_controlli" not in st.session_state: # Inizializza anche questo per le statistiche
     st.session_state["df_controlli"] = pd.DataFrame(columns=COLUMNS)
+if "uploaded_file_data" not in st.session_state: # Per persistere il file caricato
+    st.session_state["uploaded_file_data"] = None
 
-# ================================================================
-# TEST ISOLATO DEL PULSANTE: METTIAMO UN PULSANTE QUI FUORI DALLE TAB
-# PER VEDERE SE VIENE RENDERIZZATO IN ASSOLUTO
-# ================================================================
-#if st.button("TEST BUTTON - DEVE APPARIRE!", key="test_button_global"):
-#    st.write("DEBUG: Test button clicked!")
-# ================================================================
+# === ESECUZIONE BANNER ===
+show_banner()
 
 # === INTERFACCIA CON SCHEDE ===
-tabs = st.tabs(["📍START SOFFERMO", "📥 DATI SOGGETTO", "🔁STOP SOFFERMO", "📋STATISTICA"])
+tabs = st.tabs(["📍START SOFFERMO", "📥 DATI SOGGETTO", "🔁STOP SOFFERMO", "📋STATISTICHE"])
 
-# === TABS 1: START SOFFERMO ===
+# === TAB 1: START SOFFERMO ===
 with tabs[0]:
-    st.header("📍INIZIA IL POSTO DI CONTROLLO")
+    st.header("📍 Inizia il Posto di Controllo")
     
     comuni_lista = [
         "ALBERA LIGURE", "ARQUATA SCRIVIA", "BASALUZZO", "BORGHETTO DI BORBERA", "BOSIO",
@@ -164,33 +178,29 @@ with tabs[0]:
         "SAN CRISTOFORO", "SERRAVALLE SCRIVIA", "SILVANO D'ORBA", "STAZZANO", "TASSAROLO",
         "VOLTAGGIO", "VIGNOLE BORBERA"
     ]
-    # --- DEBUG: Stampa la lista dei comuni ---
-    #st.write(f"DEBUG: comuni_lista (lunghezza {len(comuni_lista)}): {comuni_lista}")
 
+    # Trova l'indice del comune corrente per pre-selezionare la selectbox
     current_comune_index = 0
     if st.session_state.get("comune_corrente") and st.session_state["comune_corrente"] in comuni_lista:
-        current_comune_index = comuni_lista.index(st.session_state["comune_corrente"])
+        try:
+            current_comune_index = comuni_lista.index(st.session_state["comune_corrente"])
+        except ValueError:
+            current_comune_index = 0 # Se il comune non è nella lista, resetta a 0
 
     comune_selezionato = st.selectbox(
-        "Seleziona Comune del controllo", 
-        options=comuni_lista, 
-        index=current_comune_index, 
+        "Seleziona Comune del controllo",
+        options=comuni_lista,
+        index=current_comune_index,
         key="select_comune_start"
     )
 
-    #st.write(f"DEBUG: Valore attuale di comune_selezionato (dopo selectbox): {comune_selezionato}")
+    success_message_placeholder = st.empty() # Placeholder per messaggi di successo
 
-    success_message_placeholder = st.empty() 
-
-    # ====================================================================================================
-    # IL TUO PULSANTE ORIGINALE
-    # ====================================================================================================
-    if st.button("🔴 INIZIA SOFFERMO", key="start_soffermo_button"):
+    if st.button("▶️ INIZIA SOFFERMO", key="start_soffermo_button", use_container_width=True):
         st.session_state["comune_corrente"] = comune_selezionato
         st.session_state["inizio_turno"] = datetime.now().strftime("%d/%m/%Y %H:%M")
         success_message_placeholder.success(f"Inizio soffermo nel comune di **{st.session_state['comune_corrente']}** alle **{st.session_state['inizio_turno']}**")
-        st.rerun() 
-    # ====================================================================================================
+        st.rerun() # Forza un re-run per aggiornare lo stato dell'app
 
     # Mostra lo stato corrente del soffermo
     if st.session_state.get("comune_corrente") and st.session_state["comune_corrente"] != "NON DEFINITO":
@@ -198,21 +208,23 @@ with tabs[0]:
     else:
         st.info("Nessun soffermo attivo. Seleziona un comune e clicca 'INIZIA SOFFERMO'.")
 
-# === TABS 2: DATI SOGGETTO ===
+# === TAB 2: DATI SOGGETTO ===
 with tabs[1]:
-    st.header("📥 INSERIMENTO DATI CONTROLLO")
+    st.header("📥 Inserimento Dati Controllo")
 
     if st.session_state["comune_corrente"] == "NON DEFINITO":
         st.warning("⚠️ Per favore, inizia un nuovo posto di controllo nella tab '📍START SOFFERMO' prima di inserire i dati.")
     else:
         st.info(f"Stai registrando un controllo a **{st.session_state['comune_corrente']}**")
 
+        # Campi input VEICOLO e TARGA
         col_input_veicolo, col_input_targa = st.columns(2)
         with col_input_veicolo:
             veicolo = st.text_input("Marca e Modello del veicolo", value=st.session_state.get('dati_precompilati', {}).get('VEICOLO', ''), key="veicolo_input")
         with col_input_targa:
             targa = st.text_input("Targa del veicolo", value=st.session_state.get('dati_precompilati', {}).get('TARGA', ''), key="targa_input")
         
+        # Campi radio (Commerciale, COPE, Cinofili, Rilievi)
         col_radio_commerciale, col_radio_cope = st.columns(2)
         with col_radio_commerciale:
             commerciale = st.radio("Veicolo commerciale?", ["NO", "SI"], horizontal=True, key="commerciale_radio")
@@ -230,157 +242,180 @@ with tabs[1]:
             rilievi = st.text_area("Specifica rilievi", value=st.session_state.get('dati_precompilati', {}).get('RILIEVI', ''), key="rilievi_text_area")
 
         st.markdown("---")
-        st.subheader("Dati Documento")
-        uploaded_file = st.file_uploader("📸 Carica foto del documento", type=["jpg", "jpeg", "png"], key="upload_document_file")
+        st.subheader("Documento e Dati Anagrafici")
         
-        if uploaded_file:
-             st.image(uploaded_file, caption="Documento caricato", use_container_width=True)
+        # Caricamento immagine documento
+        uploaded_file = st.file_uploader(
+            "📸 Carica foto del documento", 
+            type=["jpg", "jpeg", "png", "heic", "heif"], # AGGIUNTO HEIC/HEIF
+            key="upload_document_file"
+        )
+        
+        # Gestione del file caricato e OCR
+        image = None # Inizializza image a None
 
-            # --- INIZIO NUOVO CODICE PER GESTIONE HEIC ---
-            # Controlla l'estensione del file
+        if uploaded_file is not None:
+            st.session_state["uploaded_file_data"] = uploaded_file.getvalue() # Salva il contenuto per persistenza
+            st.image(uploaded_file, caption="Documento caricato", use_column_width=True)
+
+            # --- GESTIONE HEIC / CONVERSIONE IMMAGINE ---
             file_extension = uploaded_file.name.split('.')[-1].lower()
 
             if file_extension == 'heic' or file_extension == 'heif':
                 try:
-                    # Carica l'immagine HEIC
-                    heif_file = pillow_heif.read_heif(uploaded_file)
-                    # Converti in immagine PIL (RGB è un buon formato per Tesseract)
+                    heif_file = pillow_heif.read_heif(io.BytesIO(st.session_state["uploaded_file_data"]))
                     image = Image.frombytes(
-                        heif_file.mode,
-                        heif_file.size,
-                        heif_file.data,
-                        "raw",
-                        heif_file.mode,
-                        heif_file.stride,
+                        heif_file.mode, heif_file.size, heif_file.data, "raw", heif_file.mode, heif_file.stride
                     )
-                    # Se l'immagine ha un canale alfa (RGBA), convertila in RGB
                     if image.mode == 'RGBA':
                         image = image.convert('RGB')
                 except Exception as e:
                     st.error(f"Errore nella conversione dell'immagine HEIC: {e}. Assicurati che l'immagine sia valida.")
-                    st.stop() # Ferma l'esecuzione se c'è un errore grave
+                    st.stop()
             else:
-            # Per gli altri formati (JPG, PNG, ecc.), usa il metodo standard
                 try:
-                    image = Image.open(uploaded_file)
-                    if image.mode == 'RGBA': # Anche qui, converti se necessario
+                    image = Image.open(io.BytesIO(st.session_state["uploaded_file_data"]))
+                    if image.mode == 'RGBA':
                         image = image.convert('RGB')
                 except Exception as e:
                     st.error(f"Errore nell'apertura dell'immagine: {e}. Assicurati che il file sia un'immagine valida.")
                     st.stop()
+            # --- FINE GESTIONE HEIC / CONVERSIONE IMMAGINE ---
             
-            with st.spinner("Estrazione dati in corso..."):
-                try:
-                    testo_estratto = pytesseract.image_to_string(image, lang="ita")
-                    st.text_area("🔍 Testo estratto (OCR)", value=testo_estratto, height=200, key="ocr_text_area")
-                    dati_patente_ocr = estrai_dati_patente(testo_estratto)
-                    st.session_state["dati_precompilati"] = dati_patente_ocr # Salva per precompilazione
+            # --- Sezione OCR e Form per la correzione (dentro un expander) ---
+            if image is not None:
+                with st.expander("📝 Rivedi e Correggi Dati Estratti", expanded=True):
+                    with st.spinner("Estrazione dati in corso..."):
+                        try:
+                            testo_estratto = pytesseract.image_to_string(image, lang="ita")
+                            # Testo estratto visibile per controllo avanzato
+                            st.text_area("🔍 Testo estratto (OCR)", value=testo_estratto, height=150, key="ocr_text_area") # Altezza ridotta
+                            dati_patente_ocr = estrai_dati_patente(testo_estratto)
+                            st.session_state["dati_precompilati"] = dati_patente_ocr # Salva per precompilazione
 
-                except Exception as e:
-                    st.error(f"Errore durante l'OCR: {e}. Assicurati che Tesseract sia installato e configurato correttamente.")
-                    testo_estratto = ""
-                    st.session_state["dati_precompilati"] = {k: "" for k in COLUMNS} # Reset in caso di errore
-        
-        st.markdown("### 📝 Rivedi e Correggi Dati Estratti")
-        # Ho aggiunto .upper() direttamente sul valore del text_input
-        col_cognome, col_nome = st.columns(2)
-        with col_cognome:
-            cognome_input = st.text_input("Cognome", value=st.session_state.get('dati_precompilati', {}).get('COGNOME', '')).upper()
-        with col_nome:
-            nome_input = st.text_input("Nome", value=st.session_state.get('dati_precompilati', {}).get('NOME', '')).upper()
+                        except Exception as e:
+                            st.error(f"Errore durante l'OCR: {e}. Controlla i log per maggiori dettagli.")
+                            testo_estratto = ""
+                            st.session_state["dati_precompilati"] = {k: "" for k in COLUMNS} # Reset in caso di errore
+                    
+                    st.markdown("### Dati Anagrafici (Modificabili)")
+                    # Campi di input precompilati con i dati OCR
+                    col_cognome, col_nome = st.columns(2)
+                    with col_cognome:
+                        st.session_state["dati_precompilati"]["COGNOME"] = st.text_input(
+                            "Cognome", 
+                            value=st.session_state.get('dati_precompilati', {}).get('COGNOME', '')
+                        ).upper()
+                    with col_nome:
+                        st.session_state["dati_precompilati"]["NOME"] = st.text_input(
+                            "Nome", 
+                            value=st.session_state.get('dati_precompilati', {}).get('NOME', '')
+                        ).upper()
 
-        col_luogo_nascita, col_data_nascita = st.columns(2)
-        with col_luogo_nascita:
-            luogo_nascita_input = st.text_input("Luogo di Nascita", value=st.session_state.get('dati_precompilati', {}).get('LUOGO_NASCITA', '')).upper()
-        with col_data_nascita:
-            data_nascita_input = st.text_input("Data di Nascita (GG/MM/AAAA)", value=st.session_state.get('dati_precompilati', {}).get('DATA_NASCITA', ''), key="data_nascita_input")
+                    col_luogo_nascita, col_data_nascita = st.columns(2)
+                    with col_luogo_nascita:
+                        st.session_state["dati_precompilati"]["LUOGO_NASCITA"] = st.text_input(
+                            "Luogo di Nascita", 
+                            value=st.session_state.get('dati_precompilati', {}).get('LUOGO_NASCITA', '')
+                        ).upper()
+                    with col_data_nascita:
+                        st.session_state["dati_precompilati"]["DATA_NASCITA"] = st.text_input(
+                            "Data di Nascita (GG.MM.AAAA)", 
+                            value=st.session_state.get('dati_precompilati', {}).get('DATA_NASCITA', ''), 
+                            key="data_nascita_input"
+                        )
+            
+            # --- Bottone per Salvare i dati ---
+            if st.button("✅ Salva Controllo", key="salva_controllo_button", use_container_width=True):
+                if not st.session_state["comune_corrente"] or st.session_state["comune_corrente"] == "NON DEFINITO":
+                    st.error("Per favore, inizia un nuovo posto di controllo nella tab '📍START SOFFERMO' prima di salvare.")
+                else:
+                    dati_finali = {
+                        "DATA_ORA": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                        "COMUNE": st.session_state["comune_corrente"],
+                        "VEICOLO": veicolo.upper(),
+                        "TARGA": targa.upper(),
+                        "COGNOME": st.session_state["dati_precompilati"]["COGNOME"], # Usa i valori da session_state
+                        "NOME": st.session_state["dati_precompilati"]["NOME"],
+                        "LUOGO_NASCITA": st.session_state["dati_precompilati"]["LUOGO_NASCITA"],
+                        "DATA_NASCITA": st.session_state["dati_precompilati"]["DATA_NASCITA"],
+                        "COMMERCIALE": commerciale,
+                        "COPE": cope,
+                        "RILIEVI": rilievi.upper() if rilievi_si == "SI" else "",
+                        "CINOFILI": cinofili
+                    }
 
-        if st.button("📤 Salva Controllo", key="salva_controllo_button"):
-            if not st.session_state["comune_corrente"] or st.session_state["comune_corrente"] == "NON DEFINITO":
-                st.error("Per favore, inizia un nuovo posto di controllo nella tab '📍START SOFFERMO' prima di salvare.")
-            else:
-                dati_finali = {
-                    "DATA_ORA": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                    "COMUNE": st.session_state["comune_corrente"],
-                    "VEICOLO": veicolo.upper(),
-                    "TARGA": targa.upper(),
-                    "COGNOME": cognome_input,
-                    "NOME": nome_input,
-                    "LUOGO_NASCITA": luogo_nascita_input,
-                    "DATA_NASCITA": data_nascita_input,
-                    "COMMERCIALE": commerciale,
-                    "COPE": cope,
-                    "RILIEVI": rilievi.upper() if rilievi_si == "SI" else "",
-                    "CINOFILI": cinofili
-                }
+                    try:
+                        aggiorna_su_google_sheets(dati_finali)
+                        st.success("Controllo salvato correttamente!")
+                        # Resetta i campi per il prossimo inserimento
+                        st.session_state["dati_precompilati"] = {k: "" for k in COLUMNS}
+                        st.session_state["uploaded_file_data"] = None # Rimuovi il file caricato
+                        st.rerun() # Forza un re-run per pulire l'interfaccia
+                    except Exception as e:
+                        st.error(f"Errore durante il salvataggio su Google Sheets: {e}")
 
-                try:
-                    aggiorna_su_google_sheets(dati_finali)
-                    st.success("Controllo salvato correttamente!")
-                    st.session_state["dati_precompilati"] = {}
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Errore durante il salvataggio su Google Sheets: {e}")
-
-# === TABS 3: STOP SOFFERMO ===
+# === TAB 3: STOP SOFFERMO ===
 with tabs[2]:
-    st.header("🔁STOP SOFFERMO")
+    st.header("🔁 Ferma il Posto di Controllo")
     if st.session_state.get("comune_corrente", "NON DEFINITO") != "NON DEFINITO":
         st.info(f"Il controllo è attualmente in corso nel comune di **{st.session_state['comune_corrente']}** (Iniziato alle {st.session_state['inizio_turno']})")
-        if st.button("✅ CONFERMA FINE SOFFERMO", key="stop_soffermo_button"):
+        if st.button("🛑 CONFERMA FINE SOFFERMO", key="stop_soffermo_button", use_container_width=True):
             ora_fine = datetime.now().strftime("%d/%m/%Y %H:%M")
             st.success(f"✅ Il controllo nel comune di **{st.session_state['comune_corrente']}** è terminato il **{ora_fine}**")
-            st.info(f"⏱️ Orario del controllo: dalle **{st.session_state['inizio_turno']}** alle **{ora_fine}**")
+            st.info(f"⏱️ Durata del controllo: dalle **{st.session_state['inizio_turno']}** alle **{ora_fine}**")
             st.session_state["comune_corrente"] = "NON DEFINITO"
             st.session_state["inizio_turno"] = ""
-            st.success("Sessione di controllo TERMINATA.")
+            st.success("Sessione di controllo TERMINATA. Puoi iniziare una nuova.")
             st.rerun()
     else:
-        st.info("Nessun posto di controllo attivo.")
+        st.info("Nessun posto di controllo attivo al momento.")
 
-# === TABS 4: STATISTICA ===
+# === TAB 4: STATISTICHE ===
 with tabs[3]:
-    st.header("📋STATISTICHE GIORNALIERE E TOTALI")
+    st.header("📊 Statistiche Giornaliere e Totali")
     
-    if st.button("🔄 Aggiorna Statistiche", key="update_stats_button"):
+    # Pulsante per aggiornare/caricare i dati
+    if st.button("🔄 Carica/Aggiorna Dati Statistiche", key="update_stats_button", use_container_width=True):
         st.session_state["df_controlli"] = get_current_data_from_sheet()
-
-    # Carica i dati all'inizio o se non sono ancora in session_state
-    if st.session_state["df_controlli"].empty and st.button("Carica Dati Iniziali", key="load_initial_data_button"):
-        st.session_state["df_controlli"] = get_current_data_from_sheet()
+        st.success("Dati statistiche aggiornati!")
 
     df = st.session_state["df_controlli"]
     
     if not df.empty:
         st.subheader("📋 Report Controlli Completo")
-        st.dataframe(df)
+        st.dataframe(df, use_container_width=True) # Dataframe a tutta larghezza
 
         oggi = datetime.now().strftime("%d/%m/%Y")
-        df_oggi = df[df["DATA_ORA"].str.startswith(oggi, na=False)].copy()
+        # Filtra per data e assicurati che la colonna DATA_ORA sia stringa per startswith
+        df_oggi = df[df["DATA_ORA"].astype(str).str.startswith(oggi, na=False)].copy()
 
         if not df_oggi.empty and "COMUNE" in df_oggi.columns:
-            st.markdown(f"### 📊 Statistiche Controlli del {oggi}")
+            st.markdown(f"### 📈 Statistiche Controlli del {oggi}")
             
             tot_soggetti_oggi = len(df_oggi)
-            commerciali_oggi = df_oggi["COMMERCIALE"].str.upper().eq("SI").sum()
+            commerciali_oggi = df_oggi["COMMERCIALE"].astype(str).str.upper().eq("SI").sum()
             privati_oggi = tot_soggetti_oggi - commerciali_oggi
-            cope_oggi = df_oggi["COPE"].str.upper().eq("SI").sum()
-            cinofili_oggi = df_oggi["CINOFILI"].str.upper().eq("SI").sum()
+            cope_oggi = df_oggi["COPE"].astype(str).str.upper().eq("SI").sum()
+            cinofili_oggi = df_oggi["CINOFILI"].astype(str).str.upper().eq("SI").sum()
             rilievi_oggi = df_oggi[df_oggi["RILIEVI"].astype(str).str.strip() != ""].shape[0]
 
-            st.markdown(f"""
-            **Riepilogo della giornata:**
-            - **Totale controlli (soggetti/veicoli):** `{tot_soggetti_oggi}`
-            - **Mezzi commerciali:** `{commerciali_oggi}` — **Mezzi privati:** `{privati_oggi}`
-            - **Interventi COPE:** `{cope_oggi}`
-            - **Interventi Cinofili:** `{cinofili_oggi}`
-            - **Rilievi contestati:** `{rilievi_oggi}`
-            """)
+            # Uso di metriche per un layout più compatto
+            st.markdown("#### Riepilogo della giornata:")
+            col_tot, col_comm, col_priv = st.columns(3)
+            col_tot.metric("Totale Controlli", tot_soggetti_oggi)
+            col_comm.metric("Mezzi Commerciali", commerciali_oggi)
+            col_priv.metric("Mezzi Privati", privati_oggi)
+            
+            col_cope, col_cinofili, col_rilievi = st.columns(3)
+            col_cope.metric("Interventi COPE", cope_oggi)
+            col_cinofili.metric("Interventi Cinofili", cinofili_oggi)
+            col_rilievi.metric("Rilievi Contestati", rilievi_oggi)
 
             st.markdown("### 🗂️ Rendicontazione attività per ciascun Comune (Oggi)")
             
+            # Assicurati che 'COMUNE' sia una stringa per le operazioni successive
             df_oggi['COMUNE'] = df_oggi['COMUNE'].astype(str)
-
             comuni_oggi = df_oggi["COMUNE"].unique()
 
             for comune in comuni_oggi:
@@ -390,17 +425,16 @@ with tabs[3]:
                 ora_fine_comune = df_comune_oggi["DATA_ORA"].max()
                 tot_soggetti_comune = len(df_comune_oggi)
                 
-                commerciali_comune = df_comune_oggi["COMMERCIALE"].str.upper().eq("SI").sum()
+                commerciali_comune = df_comune_oggi["COMMERCIALE"].astype(str).str.upper().eq("SI").sum()
                 privati_comune = tot_soggetti_comune - commerciali_comune
                 
                 st.markdown(f"""
-                **📍 Comune:** {comune}  
-                ⏱️ Primo controllo: `{ora_inizio_comune}` — Ultimo controllo: `{ora_fine_comune}`  
-                🚗 Totale mezzi controllati: `{tot_soggetti_comune}`  
-                🔧 Mezzi commerciali: `{commerciali_comune}` — Privati: `{privati_comune}`  
                 ---
+                **📍 Comune:** **`{comune}`** ⏱️ **Primo controllo:** `{ora_inizio_comune}` — **Ultimo controllo:** `{ora_fine_comune}`  
+                🚗 **Totale mezzi controllati:** `{tot_soggetti_comune}`  
+                🔧 **Mezzi commerciali:** `{commerciali_comune}` — **Privati:** `{privati_comune}`  
                 """)
         else:
             st.info(f"Nessun dato di controllo disponibile per la giornata di oggi ({oggi}).")
     else:
-        st.info("Nessun dato disponibile nel report generale. Carica i dati o effettua i controlli.")
+        st.info("Nessun dato disponibile nel report generale. Clicca 'Carica/Aggiorna Dati Statistiche' o effettua i controlli.")
