@@ -16,7 +16,7 @@ pillow_heif.register_heif_opener()
 import pytz
 rome_tz = pytz.timezone('Europe/Rome')
 now_rome = datetime.now(pytz.utc).astimezone(rome_tz)
-current_datetime_str = now_rome.strftime("%Y-%m-%d %H:%M:%S")
+#current_datetime_str = now_rome.strftime("%Y-%m-%d %H:%M:%S")
 # Percorso locale a Tesseract (LASCIAMO COMMENTATO PER IL DEPLOYMENT SU STREAMLIT CLOUD)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
