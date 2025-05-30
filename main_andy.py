@@ -284,7 +284,7 @@ with tabs[1]:
                     aggiorna_su_google_sheets(dati_finali)
                     st.success("Controllo salvato correttamente!")
                     st.session_state["dati_precompilati"] = {}
-                    st.experimental_rerun()
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Errore durante il salvataggio su Google Sheets: {e}")
 
