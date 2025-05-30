@@ -256,7 +256,7 @@ with tabs[1]:
 
         if uploaded_file is not None:
             st.session_state["uploaded_file_data"] = uploaded_file.getvalue() # Salva il contenuto per persistenza
-            st.image(uploaded_file, caption="Documento caricato", use_column_width=True)
+            st.image(uploaded_file, caption="Documento caricato", use_container_width=True)
 
             # --- GESTIONE HEIC / CONVERSIONE IMMAGINE ---
             file_extension = uploaded_file.name.split('.')[-1].lower()
