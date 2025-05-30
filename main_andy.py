@@ -142,8 +142,8 @@ if "df_controlli" not in st.session_state: # Inizializza anche questo per le sta
 # TEST ISOLATO DEL PULSANTE: METTIAMO UN PULSANTE QUI FUORI DALLE TAB
 # PER VEDERE SE VIENE RENDERIZZATO IN ASSOLUTO
 # ================================================================
-if st.button("TEST BUTTON - DEVE APPARIRE!", key="test_button_global"):
-    st.write("DEBUG: Test button clicked!")
+#if st.button("TEST BUTTON - DEVE APPARIRE!", key="test_button_global"):
+#    st.write("DEBUG: Test button clicked!")
 # ================================================================
 
 # === INTERFACCIA CON SCHEDE ===
@@ -163,7 +163,7 @@ with tabs[0]:
         "VOLTAGGIO", "VIGNOLE BORBERA"
     ]
     # --- DEBUG: Stampa la lista dei comuni ---
-    st.write(f"DEBUG: comuni_lista (lunghezza {len(comuni_lista)}): {comuni_lista}")
+    #st.write(f"DEBUG: comuni_lista (lunghezza {len(comuni_lista)}): {comuni_lista}")
 
     current_comune_index = 0
     if st.session_state.get("comune_corrente") and st.session_state["comune_corrente"] in comuni_lista:
@@ -176,7 +176,7 @@ with tabs[0]:
         key="select_comune_start"
     )
 
-    st.write(f"DEBUG: Valore attuale di comune_selezionato (dopo selectbox): {comune_selezionato}")
+    #st.write(f"DEBUG: Valore attuale di comune_selezionato (dopo selectbox): {comune_selezionato}")
 
     success_message_placeholder = st.empty() 
 
