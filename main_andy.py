@@ -13,6 +13,10 @@ import pillow_heif
 # Registra il lettore HEIC (necessario per Pillow)
 pillow_heif.register_heif_opener()
 
+import pytz
+rome_tz = pytz.timezone('Europe/Rome')
+now_rome = datetime.now(pytz.utc).astimezone(rome_tz)
+current_datetime_str = now_rome.strftime("%Y-%m-%d %H:%M:%S")
 # Percorso locale a Tesseract (LASCIAMO COMMENTATO PER IL DEPLOYMENT SU STREAMLIT CLOUD)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
@@ -198,7 +202,7 @@ with tabs[0]:
 
     if st.button("▶️ INIZIA SOFFERMO", key="start_soffermo_button", use_container_width=True):
         st.session_state["comune_corrente"] = comune_selezionato
-        st.session_state["inizio_turno"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+        st.session_state["inizio_turno"] = now_rome.strftime("%d/%m/%Y %H:%M")
         success_message_placeholder.success(f"Inizio soffermo nel comune di **{st.session_state['comune_corrente']}** alle **{st.session_state['inizio_turno']}**")
         st.rerun() # Forza un re-run per aggiornare lo stato dell'app
 
@@ -361,7 +365,7 @@ with tabs[2]:
     if st.session_state.get("comune_corrente", "NON DEFINITO") != "NON DEFINITO":
         st.info(f"Il controllo è attualmente in corso nel comune di **{st.session_state['comune_corrente']}** (Iniziato alle {st.session_state['inizio_turno']})")
         if st.button("🛑 CONFERMA FINE SOFFERMO", key="stop_soffermo_button", use_container_width=True):
-            ora_fine = datetime.now().strftime("%d/%m/%Y %H:%M")
+            ora_fine = now_rome.strftime("%d/%m/%Y %H:%M")
             st.success(f"✅ Il controllo nel comune di **{st.session_state['comune_corrente']}** è terminato il **{ora_fine}**")
             st.info(f"⏱️ Durata del controllo: dalle **{st.session_state['inizio_turno']}** alle **{ora_fine}**")
             st.session_state["comune_corrente"] = "NON DEFINITO"
