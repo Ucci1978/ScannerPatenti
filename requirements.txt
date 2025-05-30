@@ -5,3 +5,4 @@ pandas>=2.0.0
 gspread>=6.0.0
 google-auth-oauthlib>=1.2.0 # Questa l'avevo omessa, è importante se la usi
 Pillow-heif
+pytz
