@@ -56,6 +56,7 @@ except Exception as e:
     # st.stop()
 
 # === FUNZIONE BANNER (se 'sfondo.png' è un file locale, assicurati che sia nel repository) ===
+st.title("COMPAGNIA NOVI LIGURE")
 def show_banner():
     # Per un deployment, assicurati che 'sfondo.png' sia accessibile (es. nella stessa cartella del main_andy.py)
     try:
