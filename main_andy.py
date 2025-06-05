@@ -77,9 +77,10 @@ def show_banner():
 # === FUNZIONI PER L'ESTRAZIONE E IL SALVATAGGIO DEI DATI ===
 def estrai_dati_patente(testo):
     # Passaggio 1: Pulizia e normalizzazione del testo OCR
-    # Converti tutto in maiuscolo per rendere le regex case-insensitive (anche se re.IGNORECASE aiuta)
-    # Rimuovi i caratteri che spesso sono rumore o errori di OCR
-    cleaned_text = testo.upper().replace(':', ' ').replace(';', ' ').replace('|', ' ').replace('O', '0').replace('I', '1').replace('L', '1')
+    # Converti tutto in maiuscolo per uniformità.
+    # Rimuovi i caratteri che spesso sono rumore o errori di OCR.
+    # IMPORTANT: Rimosse le sostituzioni 'O'->'0', 'I'->'1', 'L'->'1' che causavano errori nei nomi/luoghi.
+    cleaned_text = testo.upper().replace(':', ' ').replace(';', ' ').replace('|', ' ')
     righe = [r.strip() for r in cleaned_text.split("\n") if r.strip()]
 
     dati = {
@@ -92,72 +93,85 @@ def estrai_dati_patente(testo):
     # Tentativi multipli per trovare i campi, usando diverse strategie
 
     # --- Estrazione del Cognome (Campo 1) ---
-    # Cerca "1." o "COGNOME" o "SURNAME" o "1 COGNOME" e poi il cognome
-    # La regex è più flessibile su spazi e caratteri (anche apostrofi e trattini)
-    # Cerca la riga successiva se il dato non è sulla stessa riga di "1."
-    pattern_cognome = r"(?:^|\n)(?:1[\.\s]?)?\s*(?:COGNOME|SURNAME|LAST NAME|COGNOMN?)?\s*([A-Z\s\'\-]+)"
+    # Cerca "1." o "COGNOME" e poi il cognome.
+    # Aggiunti lookaheads negativi per evitare di catturare "PATENTE", "LICENZA", "DRIVING" o "PERMIT"
+    pattern_cognome = r"(?:^|\n)(?:1[\.\s]?)?\s*(?:COGNOME|SURNAME|LAST NAME|COGNOMN?)\s*(?!D\b)(?!DI\b)(?!PATENTE|LICENZA|DRIVING|PERMIT)\b([A-Z\s\'\-]+)"
     for i, r in enumerate(righe):
-        match = re.search(pattern_cognome, r)
+        match = re.search(pattern_cognome, r, re.IGNORECASE)
         if match:
-            # Cattura il gruppo 1 (il cognome)
             dati["COGNOME"] = match.group(1).strip()
             # Pulizia extra: rimuovi numeri o simboli non alfabetici se compaiono per errore
             dati["COGNOME"] = re.sub(r'[^A-Z\s\'-]', '', dati["COGNOME"]).strip()
-            if dati["COGNOME"]: break # Se trovato, esci
+            # Aggiunta una validazione minima per evitare catture troppo brevi o generiche
+            if len(dati["COGNOME"]) > 1 and "PATENTE" not in dati["COGNOME"] and "LICENZA" not in dati["COGNOME"]:
+                break # Se trovato e valido, esci
+            else:
+                dati["COGNOME"] = "" # Reset se non valido
 
     # --- Estrazione del Nome (Campo 2) ---
-    # Simile al cognome, cerca "2." o "NOME" o "FIRST NAME"
-    pattern_nome = r"(?:^|\n)(?:2[\.\s]?)?\s*(?:NOME|FIRST NAME|NAME)?\s*([A-Z\s\'\-]+)"
+    # Simile al cognome, cerca "2." o "NOME" o "FIRST NAME".
+    pattern_nome = r"(?:^|\n)(?:2[\.\s]?)?\s*(?:NOME|FIRST NAME|NAME)\s*(?!D\b)(?!DI\b)(?!PATENTE|LICENZA|DRIVING|PERMIT)\b([A-Z\s\'\-]+)"
     for i, r in enumerate(righe):
-        match = re.search(pattern_nome, r)
+        match = re.search(pattern_nome, r, re.IGNORECASE)
         if match:
             dati["NOME"] = match.group(1).strip()
             dati["NOME"] = re.sub(r'[^A-Z\s\'-]', '', dati["NOME"]).strip()
-            if dati["NOME"]: break
+            if len(dati["NOME"]) > 1 and "PATENTE" not in dati["NOME"] and "LICENZA" not in dati["NOME"]:
+                break
+            else:
+                dati["NOME"] = ""
 
     # --- Estrazione Data e Luogo di Nascita (Campo 3) ---
-    # Questo è più complesso. Cerca "3." o "DATA DI NASCITA" / "LUOGO DI NASCITA"
     # La data deve essere robusta a GG.MM.AAAA, GG/MM/AAAA, GG-MM-AAAA
-    # Il luogo può contenere spazi e caratteri vari
-    pattern_data_luogo = r"(?:^|\n)(?:3[\.\s]?)?\s*(?:DATA DI NASCITA|DATE OF BIRTH|BORN)?\s*(\d{2}[./-]\d{2}[./-]\d{2,4})\s*(\S.*)"
+    # Il luogo può contenere spazi, caratteri vari e (XX) per la provincia.
+    # Nuovo pattern per LUOGO_NASCITA per essere più specifico
+    pattern_data_luogo = r"(?:^|\n)(?:3[\.\s]?)?\s*(?:DATA DI NASCITA|DATE OF BIRTH|BORN)?\s*(\d{2}[./-]\d{2}[./-]\d{2,4})\s*([A-Z\s\'\-\(\)]{2,}(?:\s*\([A-Z]{2}\))?)"
+
     for i, r in enumerate(righe):
-        match = re.search(pattern_data_luogo, r)
+        match = re.search(pattern_data_luogo, r, re.IGNORECASE)
         if match:
             # Data di nascita: uniforma il separatore a '.'
             data_nascita_raw = match.group(1)
             dati["DATA_NASCITA"] = re.sub(r'[/-]', '.', data_nascita_raw)
-            
+
             # Luogo di nascita: ripulisci e assegna
             luogo_nascita_raw = match.group(2).strip()
-            # Rimuovi numeri o pattern di date che Tesseract potrebbe aver confuso con il luogo
+            # Rimuovi pattern di date che Tesseract potrebbe aver confuso con il luogo
             luogo_nascita_raw = re.sub(r'\d{2}[./-]\d{2}[./-]\d{2,4}', '', luogo_nascita_raw).strip()
-            # Rimuovi caratteri non desiderati
-            dati["LUOGO_NASCITA"] = re.sub(r'[^\w\s\'-]', '', luogo_nascita_raw).strip() # Consente lettere, numeri, spazi, ', -
-            if dati["DATA_NASCITA"] and dati["LUOGO_NASCITA"]: break
+            # Rimuovi caratteri non desiderati, ma consente lettere, spazi, apostrofi, trattini, parentesi
+            dati["LUOGO_NASCITA"] = re.sub(r'[^A-Z\s\'\-\(\)]', '', luogo_nascita_raw).strip()
+
+            if dati["DATA_NASCITA"] and dati["LUOGO_NASCITA"] and len(dati["LUOGO_NASCITA"]) > 1:
+                break
 
     # Tentativi aggiuntivi se i primi falliscono (cerca pattern di date senza etichetta "3.")
     # Questo è utile se l'OCR non riconosce bene il "3."
     if not dati["DATA_NASCITA"] and not dati["LUOGO_NASCITA"]:
         for r in righe:
             # Cerca solo una data e poi un testo che segue, assumendo che sia la data/luogo di nascita
-            match = re.search(r"(\d{2}[./-]\d{2}[./-]\d{2,4})\s*(\S.+)", r)
+            # Nuovo pattern per Luogo_Nascita anche qui, per coerenza
+            match = re.search(r"(\d{2}[./-]\d{2}[./-]\d{2,4})\s*([A-Z\s\'\-\(\)]{2,}(?:\s*\([A-Z]{2}\))?)", r, re.IGNORECASE)
             if match:
                 # Controlla se la riga non sembra una data di emissione o scadenza
-                # Puoi aggiungere qui delle heuristche, es. se la riga contiene "DATA DI RILASCIO" o "SCADENZA" la ignori.
-                if not re.search(r'(DATA DI RILASCIO|SCADENZA|EMISSIONE|VALIDA)', r, re.IGNORECASE):
+                if not re.search(r'(DATA DI RILASCIO|SCADENZA|EMISSIONE|VALIDA|VAL\.)', r, re.IGNORECASE):
                     dati["DATA_NASCITA"] = re.sub(r'[/-]', '.', match.group(1))
                     luogo_nascita_raw = match.group(2).strip()
-                    dati["LUOGO_NASCITA"] = re.sub(r'[^\w\s\'-]', '', luogo_nascita_raw).strip()
-                    if dati["DATA_NASCITA"] and dati["LUOGO_NASCITA"]: break
+                    dati["LUOGO_NASCITA"] = re.sub(r'[^A-Z\s\'\-\(\)]', '', luogo_nascita_raw).strip()
+                    if dati["DATA_NASCITA"] and dati["LUOGO_NASCITA"] and len(dati["LUOGO_NASCITA"]) > 1:
+                        break
     
     # Post-pulizia finale per i dati estratti: Assicurati che siano solo lettere, spazi, apostrofi, trattini
     for key in ["COGNOME", "NOME", "LUOGO_NASCITA"]:
         if dati[key]:
-            dati[key] = re.sub(r'[^A-Z\s\'-]', '', dati[key]).strip()
-            dati[key] = dati[key].replace('  ', ' ') # Rimuovi doppi spazi
+            # Rimuovi doppi spazi e pulisci ulteriormente
+            dati[key] = re.sub(r'\s+', ' ', dati[key]).strip()
+            # Pulizia specifica per ogni campo
+            if key in ["COGNOME", "NOME"]:
+                dati[key] = re.sub(r'[^A-Z\s\'-]', '', dati[key]).strip()
+            elif key == "LUOGO_NASCITA":
+                dati[key] = re.sub(r'[^A-Z\s\'\-\(\)]', '', dati[key]).strip()
 
     return dati
-
 def aggiorna_su_google_sheets(dati_dict):
     values = [dati_dict.get(col, "") for col in COLUMNS]
     sheet.append_row(values)
