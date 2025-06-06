@@ -9,6 +9,7 @@ from datetime import datetime
 import json
 import io
 import pillow_heif
+import pytz # Assicurati che pytz sia nel tuo requirements.txt
 
 # Registra il lettore HEIC (necessario per Pillow)
 pillow_heif.register_heif_opener()
@@ -21,21 +22,24 @@ st.set_page_config(
     initial_sidebar_state="collapsed" # Per mantenere la sidebar nascosta all'inizio
 )
 
-import pytz
 rome_tz = pytz.timezone('Europe/Rome')
 now_rome = datetime.now(pytz.utc).astimezone(rome_tz)
-#current_datetime_str = now_rome.strftime("%Y-%m-%d %H:%M:%S")
+
 # Percorso locale a Tesseract (LASCIAMO COMMENTATO PER IL DEPLOYMENT SU STREAMLIT CLOUD)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-logo_path = "Logo1.png" # <--- RICONTROLLA BENE MAIUSCOLE/MINUSCOLE QUI
+
+logo_path = "Logo1.png" # <--- ATTENZIONE ALLA CASE-SENSITIVITY!
+                         # Assicurati che "Logo1.png" qui corrisponda ESATTAMENTE (maiuscole/minuscole)
+                         # al nome del file su GitHub (es. 'logo1.png' o 'Logo1.png').
 try:
     st.sidebar.image(logo_path, use_container_width=True)
-    #st.sidebar.success(f"Logo '{logo_path}' caricato correttamente nella sidebar!") # Messaggio di successo!
+    # Rimuovi il commento dalla riga seguente per un messaggio di debug sul logo
+    # st.sidebar.success(f"Logo '{logo_path}' caricato correttamente nella sidebar!")
 except Exception as e:
     st.sidebar.error(f"Errore nel caricamento del logo '{logo_path}': {e}. Assicurati che il file esista e sia leggibile.")
 
 st.sidebar.markdown("---")
-st.sidebar.write("La mia App Patenti")# Puoi anche aggiungere del testo sotto il logo nella sidebar se vuoi
+st.sidebar.write("La mia App Patenti")
 
 # === GOOGLE SHEET SETUP ===
 # Le tue credenziali e la configurazione di gspread
@@ -72,7 +76,7 @@ def show_banner():
         st.image("sfondo.png", use_container_width=True) # use_column_width è più flessibile di use_container_width
     except FileNotFoundError:
         st.warning("File 'sfondo.png' non trovato. Assicurati che sia nel tuo repository.")
-    
+        
     st.markdown("""
     <style>
     .main {
@@ -84,14 +88,28 @@ def show_banner():
     """, unsafe_allow_html=True)
 
 # === FUNZIONI PER L'ESTRAZIONE E IL SALVATAGGIO DEI DATI ===
-def estrai_dati_patente(image_path_or_object):
-    # ... (Il resto del codice della tua funzione, con i print DEBUG, va qui) ...
-
-    # Assicurati che l'immagine sia in formato Pillow
-    if isinstance(image_path_or_object, str):
-        image = Image.open(image_path_or_object)
+def estrai_dati_patente(image_input):
+    """
+    Estrae i dati da un'immagine della patente usando OCR.
+    Accetta un percorso di file (stringa) o un oggetto immagine Pillow/Streamlit UploadedFile.
+    """
+    image = None
+    if isinstance(image_input, str):
+        # Se è un percorso, apri l'immagine
+        image = Image.open(image_input)
+    elif hasattr(image_input, 'getvalue'): # Se è un oggetto Streamlit UploadedFile
+        image = Image.open(io.BytesIO(image_input.getvalue()))
+    elif isinstance(image_input, Image.Image):
+        # Se è già un oggetto Pillow Image, usalo direttamente
+        image = image_input
     else:
-        image = image_path_or_object
+        raise TypeError(f"Tipo di oggetto immagine non supportato: {type(image_input)}")
+
+    # Assicurati che l'immagine sia in modalità RGB per Tesseract se necessario
+    if image.mode == 'RGBA':
+        image = image.convert('RGB')
+    elif image.mode == 'P': # Gestisci immagini con palette
+        image = image.convert('RGB')
 
     # Esegui l'OCR sull'intera immagine con lingua italiana
     full_text = pytesseract.image_to_string(image, lang='ita')
@@ -180,8 +198,8 @@ def estrai_dati_patente(image_path_or_object):
     else:
         print("DEBUG: Numero Patente (Campo 5) non trovato.")
 
-
-    return dati_patente
+    # Restituisci anche full_text e cleaned_text_block per il debug nell'interfaccia
+    return dati_patente, full_text, cleaned_text_block
 
 # --- AGGIUNGI QUESTO CODICE NEL TUO SCRIPT PRINCIPALE Streamlit DOVE CARICHI E PROCESSI L'IMMAGINE ---
 
@@ -195,9 +213,8 @@ if uploaded_file is not None:
         st.image(uploaded_file, caption='Immagine Caricata.', use_column_width=True)
         st.write("Elaborazione in corso...")
 
-        # Chiamata alla funzione di estrazione dati
-        # Passiamo direttamente l'oggetto uploaded_file alla funzione
-        dati_patente = estrai_dati_patente(uploaded_file)
+        # Chiamata alla funzione di estrazione dati, ora restituisce anche i testi di debug
+        dati_patente, full_text_debug, cleaned_text_block_debug = estrai_dati_patente(uploaded_file)
 
         st.subheader("Dati Estratti:")
         st.write(f"**Cognome:** {dati_patente['cognome']}")
@@ -211,10 +228,10 @@ if uploaded_file is not None:
         # --- INIZIO: NUOVO CODICE PER MOSTRARE I DEBUG NELL'APP ---
         st.subheader("Informazioni di Debug (per l'assistenza):")
         # Mostra il testo OCR completo
-        st.text_area("Testo OCR completo estratto:", value=full_text, height=200) # full_text deve essere accessibile qui
+        st.text_area("Testo OCR completo estratto:", value=full_text_debug, height=200)
 
         # Mostra il testo pulito per l'elaborazione
-        st.text_area("Testo OCR pulito per l'elaborazione:", value=cleaned_text_block, height=200) # cleaned_text_block deve essere accessibile qui
+        st.text_area("Testo OCR pulito per l'elaborazione:", value=cleaned_text_block_debug, height=200)
 
         # Per mostrare i valori puliti e estratti, puoi usare st.write o st.json per il dizionario dati_patente
         st.json(dati_patente)
@@ -224,7 +241,7 @@ if uploaded_file is not None:
     except Exception as e:
         st.error(f"Si è verificato un errore durante l'elaborazione: {e}")
         st.error("Assicurati che l'immagine sia chiara e leggibile e che le dipendenze siano installate correttamente.")
-    
+        
 def aggiorna_su_google_sheets(dati_dict):
     values = [dati_dict.get(col, "") for col in COLUMNS]
     sheet.append_row(values)
@@ -233,18 +250,18 @@ def get_current_data_from_sheet():
     data_raw = sheet.get_all_values()
     if not data_raw:
         return pd.DataFrame(columns=COLUMNS)
-    
+        
     header_row_index = -1
     for i, row in enumerate(data_raw):
         # Cerca l'intestazione DATA_ORA in modo case-insensitive e strip
         if "DATA_ORA" in [c.strip().upper() for c in row]:
             header_row_index = i
             break
-    
+        
     if header_row_index == -1:
         st.warning("Impossibile trovare le intestazioni nel foglio Google. Verificare il formato o il nome della colonna 'DATA_ORA'.")
         return pd.DataFrame(columns=COLUMNS)
-    
+        
     headers = [c.strip().upper() for c in data_raw[header_row_index]]
     data_rows = data_raw[header_row_index + 1:]
     
@@ -381,69 +398,57 @@ with tabs[1]:
             # --- GESTIONE HEIC / CONVERSIONE IMMAGINE ---
             file_extension = uploaded_file.name.split('.')[-1].lower()
 
-            if file_extension == 'heic' or file_extension == 'heif':
-                try:
-                    heif_file = pillow_heif.read_heif(io.BytesIO(st.session_state["uploaded_file_data"]))
-                    image = Image.frombytes(
-                        heif_file.mode, heif_file.size, heif_file.data, "raw", heif_file.mode, heif_file.stride
-                    )
-                    if image.mode == 'RGBA':
-                        image = image.convert('RGB')
-                except Exception as e:
-                    st.error(f"Errore nella conversione dell'immagine HEIC: {e}. Assicurati che l'immagine sia valida.")
-                    st.stop()
-            else:
-                try:
-                    image = Image.open(io.BytesIO(st.session_state["uploaded_file_data"]))
-                    if image.mode == 'RGBA':
-                        image = image.convert('RGB')
-                except Exception as e:
-                    st.error(f"Errore nell'apertura dell'immagine: {e}. Assicurati che il file sia un'immagine valida.")
-                    st.stop()
-            # --- FINE GESTIONE HEIC / CONVERSIONE IMMAGINE ---
+            # Passiamo l'oggetto UploadedFile direttamente alla funzione estrai_dati_patente,
+            # che ora sa come gestirlo con io.BytesIO.
+            # Non è più necessario aprire qui l'immagine per il debug,
+            # perché la funzione estrai_dati_patente gestirà l'apertura e l'OCR.
             
             # --- Sezione OCR e Form per la correzione (dentro un expander) ---
-            if image is not None:
-                with st.expander("📝 Rivedi e Correggi Dati Estratti", expanded=True):
-                    with st.spinner("Estrazione dati in corso..."):
-                        try:
-                            testo_estratto = pytesseract.image_to_string(image, lang="ita")
-                            # Testo estratto visibile per controllo avanzato
-                            st.text_area("🔍 Testo estratto (OCR)", value=testo_estratto, height=150, key="ocr_text_area") # Altezza ridotta
-                            dati_patente_ocr = estrai_dati_patente(testo_estratto)
-                            st.session_state["dati_precompilati"] = dati_patente_ocr # Salva per precompilazione
+            with st.expander("📝 Rivedi e Correggi Dati Estratti", expanded=True):
+                with st.spinner("Estrazione dati in corso..."):
+                    try:
+                        # CHIAMATA ALLA FUNZIONE MODIFICATA: ora restituisce dati_patente, full_text_debug, cleaned_text_block_debug
+                        dati_patente_ocr, full_text_ocr, cleaned_text_block_ocr = estrai_dati_patente(uploaded_file)
+                        st.session_state["dati_precompilati"] = dati_patente_ocr # Salva per precompilazione
 
-                        except Exception as e:
-                            st.error(f"Errore durante l'OCR: {e}. Controlla i log per maggiori dettagli.")
-                            testo_estratto = ""
-                            st.session_state["dati_precompilati"] = {k: "" for k in COLUMNS} # Reset in caso di errore
-                    
-                    st.markdown("### Dati Anagrafici (Modificabili)")
-                    # Campi di input precompilati con i dati OCR
-                    col_cognome, col_nome = st.columns(2)
-                    with col_cognome:
-                        st.session_state["dati_precompilati"]["COGNOME"] = st.text_input(
-                            "Cognome", 
-                            value=st.session_state.get('dati_precompilati', {}).get('COGNOME', '')
-                        ).upper()
-                    with col_nome:
-                        st.session_state["dati_precompilati"]["NOME"] = st.text_input(
-                            "Nome", 
-                            value=st.session_state.get('dati_precompilati', {}).get('NOME', '')
-                        ).upper()
+                        # Mostra il testo OCR completo
+                        st.text_area("🔍 Testo estratto (OCR)", value=full_text_ocr, height=150, key="ocr_text_area") # Altezza ridotta
+                        
+                        # Mostra il testo pulito per l'elaborazione (se necessario per debug nell'interfaccia)
+                        # st.text_area("Testo OCR pulito:", value=cleaned_text_block_ocr, height=100)
+                        
+                    except Exception as e:
+                        st.error(f"Errore durante l'OCR: {e}. Controlla i log per maggiori dettagli.")
+                        full_text_ocr = "" # Reset per evitare errori se non estratto
+                        cleaned_text_block_ocr = "" # Reset per evitare errori se non estratto
+                        st.session_state["dati_precompilati"] = {k: "" for k in COLUMNS} # Reset in caso di errore
+                
+                st.markdown("### Dati Anagrafici (Modificabili)")
+                # Campi di input precompilati con i dati OCR
+                col_cognome, col_nome = st.columns(2)
+                with col_cognome:
+                    st.session_state["dati_precompilati"]["COGNOME"] = st.text_input(
+                        "Cognome", 
+                        value=st.session_state.get('dati_precompilati', {}).get('COGNOME', '')
+                    ).upper()
+                with col_nome:
+                    st.session_state["dati_precompilati"]["NOME"] = st.text_input(
+                        "Nome", 
+                        value=st.session_state.get('dati_precompilati', {}).get('NOME', '')
+                    ).upper()
 
-                    col_luogo_nascita, col_data_nascita = st.columns(2)
-                    with col_luogo_nascita:
-                        st.session_state["dati_precompilati"]["LUOGO_NASCITA"] = st.text_input(
-                            "Luogo di Nascita", 
-                            value=st.session_state.get('dati_precompilati', {}).get('LUOGO_NASCITA', '')
-                        ).upper()
-                    with col_data_nascita:
-                        st.session_state["dati_precompilati"]["DATA_NASCITA"] = st.text_input(
-                            "Data di Nascita (GG.MM.AAAA)", 
-                            value=st.session_state.get('dati_precompilati', {}).get('DATA_NASCITA', ''), 
-                            key="data_nascita_input"
-                        )
+                col_luogo_nascita, col_data_nascita = st.columns(2)
+                with col_luogo_nascita:
+                    st.session_state["dati_precompilati"]["LUOGO_NASCITA"] = st.text_input(
+                        "Luogo di Nascita", 
+                        value=st.session_state.get('dati_precompilati', {}).get('LUOGO_NASCITA', '')
+                    ).upper()
+                with col_data_nascita:
+                    st.session_state["dati_precompilati"]["DATA_NASCITA"] = st.text_input(
+                        "Data di Nascita (GG.MM.AAAA)", 
+                        value=st.session_state.get('dati_precompilati', {}).get('DATA_NASCITA', ''), 
+                        key="data_nascita_input"
+                    )
             
             # --- Bottone per Salvare i dati ---
             if st.button("✅ Salva Controllo", key="salva_controllo_button", use_container_width=True):
