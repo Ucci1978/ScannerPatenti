@@ -42,11 +42,12 @@ scope = [
 ]
 
 try:
-    creds_json_string = st.secrets["google_service_account_json"]
-    service_account_info = json.loads(creds_json_string)
-    creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
-    client = gspread.authorize(creds)
-    sheet = client.open("Controlli_Pattuglia").sheet1
+    #creds_json_string = st.secrets["google_service_account_json"]
+    #service_account_info = json.loads(creds_json_string)
+    #creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
+    #client = gspread.authorize(creds)
+    #sheet = client.open("Controlli_Pattuglia").sheet1
+    pass
 except KeyError:
     st.error("Errore: La secret 'google_service_account_json' non è configurata o ha un nome errato. Verifica le tue Streamlit secrets.")
 except json.JSONDecodeError as e:
