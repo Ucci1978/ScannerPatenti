@@ -23,7 +23,7 @@ st.set_page_config(
 )
 
 rome_tz = pytz.timezone('Europe/Rome')
-now_rome = datetime.now(pytz.utc).astrze(rome_tz)
+now_rome = datetime.now(pytz.utc).astimezone(rome_tz)
 
 # Percorso locale a Tesseract (LASCIAMO COMMENTATO PER IL DEPLOYMENT SU STREAMLIT CLOUD)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
