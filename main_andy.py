@@ -27,7 +27,7 @@ now_rome = datetime.now(pytz.utc).astimezone(rome_tz)
 #current_datetime_str = now_rome.strftime("%Y-%m-%d %H:%M:%S")
 # Percorso locale a Tesseract (LASCIAMO COMMENTATO PER IL DEPLOYMENT SU STREAMLIT CLOUD)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-logo_path = "logo1.png" # <--- RICONTROLLA BENE MAIUSCOLE/MINUSCOLE QUI
+logo_path = "Logo1.png" # <--- RICONTROLLA BENE MAIUSCOLE/MINUSCOLE QUI
 try:
     st.sidebar.image(logo_path, use_column_width=True)
     st.sidebar.success(f"Logo '{logo_path}' caricato correttamente nella sidebar!") # Messaggio di successo!
