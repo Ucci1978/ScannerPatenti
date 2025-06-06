@@ -27,18 +27,15 @@ now_rome = datetime.now(pytz.utc).astimezone(rome_tz)
 #current_datetime_str = now_rome.strftime("%Y-%m-%d %H:%M:%S")
 # Percorso locale a Tesseract (LASCIAMO COMMENTATO PER IL DEPLOYMENT SU STREAMLIT CLOUD)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-logo_path = "Logo1.png" # <--- Deve essere "logo1.png" tra virgolette!
+logo_path = "logo1.png" # <--- RICONTROLLA BENE MAIUSCOLE/MINUSCOLE QUI
 try:
-    # QUI usi la variabile logo_path che contiene il nome del file
-    logo = Image.open(logo_path)
-    # Inserisci il logo nella sidebar
-    st.sidebar.image(logo, use_container_width=True) # use_column_width=True adatta l'immagine alla larghezza della sidebar
-except FileNotFoundError:
-    st.sidebar.error(f"Errore: Il file logo '{logo_path}' non trovato. Assicurati che sia nella stessa cartella o che il percorso sia corretto.")
+    st.sidebar.image(logo_path, use_column_width=True)
+    st.sidebar.success(f"Logo '{logo_path}' caricato correttamente nella sidebar!") # Messaggio di successo!
+except Exception as e:
+    st.sidebar.error(f"Errore nel caricamento del logo '{logo_path}': {e}. Assicurati che il file esista e sia leggibile.")
 
-# Puoi anche aggiungere del testo sotto il logo nella sidebar se vuoi
-st.sidebar.markdown("---") # Una linea separatrice
-st.sidebar.write("La mia App Patenti")
+st.sidebar.markdown("---")
+st.sidebar.write("La mia App Patenti")# Puoi anche aggiungere del testo sotto il logo nella sidebar se vuoi
 
 # === GOOGLE SHEET SETUP ===
 # Le tue credenziali e la configurazione di gspread
