@@ -23,7 +23,7 @@ st.set_page_config(
 )
 
 rome_tz = pytz.timezone('Europe/Rome')
-now_rome = datetime.now(pytz.utc).astimezone(rome_tz)
+now_rome = datetime.now(pytz.utc).astrze(rome_tz)
 
 # Percorso locale a Tesseract (LASCIAMO COMMENTATO PER IL DEPLOYMENT SU STREAMLIT CLOUD)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
@@ -117,6 +117,8 @@ def estrai_dati_patente(image_input):
 
     # Pulizia del testo per facilitare la ricerca
     cleaned_text_block = full_text.upper().replace('\n', ' ')
+    # Rimuovi specificamente le parentesi intorno al luogo di nascita
+    cleaned_text_block = re.sub(r'\(([A-Z\s]+)\)', r'\1', cleaned_text_block) # Rimuove (LE) e lascia LE
     cleaned_text_block = re.sub(r'[^A-Z0-9\s\/\.:-]', '', cleaned_text_block) # Manteniamo numeri, /, :, . e -
     print(f"DEBUG: Testo OCR pulito per l'elaborazione:\n{cleaned_text_block}")
 
@@ -132,11 +134,11 @@ def estrai_dati_patente(image_input):
     }
 
     # Regex per il cognome (campo 1)
-    cognome_match = re.search(r'1\s*([A-Z\s\'-]+)', cleaned_text_block)
+    # Cattura anche punti esclamativi o altri simboli non alfanumerici e li pulisce dopo
+    cognome_match = re.search(r'1\s*([A-Z\s\'-_]+)', cleaned_text_block) # Aggiungo _ per maggiore robustezza
     if cognome_match:
         extracted_value = cognome_match.group(1).strip()
-        # Puliamo ulteriormente il cognome da caratteri non desiderati ma manteniamo - e '
-        cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
+        cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip() # Rimuovi simboli non voluti
         dati_patente['cognome'] = cleaned_value
         print(f"DEBUG: Cognome (Campo 1) - Estratto: '{extracted_value}', Pulito: '{cleaned_value}'")
     else:
@@ -144,7 +146,7 @@ def estrai_dati_patente(image_input):
 
 
     # Regex per il nome (campo 2)
-    nome_match = re.search(r'2\s*([A-Z\s\'-]+)', cleaned_text_block)
+    nome_match = re.search(r'2\s*([A-Z\s\'-_]+)', cleaned_text_block) # Aggiungo _
     if nome_match:
         extracted_value = nome_match.group(1).strip()
         cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
@@ -155,51 +157,75 @@ def estrai_dati_patente(image_input):
 
 
     # Regex per data e luogo di nascita (campo 3)
-    data_luogo_nascita_match = re.search(r'3\s*(\d{2}\.\d{2}\.\d{4})\s*([A-Z\s\'-]+)', cleaned_text_block)
+    # Accetta sia '.' che '/' come separatore di data e anni a 2 o 4 cifre.
+    # Assicurati che "LE" sia catturato anche se non tra parentesi dopo la pulizia
+    data_luogo_nascita_match = re.search(r'3\s*(\d{2}[./]\d{2}[./](\d{4}|\d{2}))\s*([A-Z\s\'-]+)', cleaned_text_block)
     if data_luogo_nascita_match:
-        dati_patente['data_nascita'] = data_luogo_nascita_match.group(1).strip()
-        extracted_value = data_luogo_nascita_match.group(2).strip()
-        cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
-        dati_patente['luogo_nascita'] = cleaned_value
-        print(f"DEBUG: Data di Nascita (Campo 3) - Estratto: '{data_luogo_nascita_match.group(1).strip()}'")
-        print(f"DEBUG: Luogo di Nascita (Campo 3) - Estratto: '{extracted_value}', Pulito: '{cleaned_value}'")
+        data_nascita_raw = data_luogo_nascita_match.group(1).strip()
+        # Converte l'anno a 2 cifre in 4 cifre (es. 78 -> 1978, se <= anno corrente)
+        anno_raw = data_nascita_raw[-2:]
+        if len(anno_raw) == 2:
+            current_year_last_two_digits = datetime.now().year % 100
+            if int(anno_raw) <= current_year_last_two_digits: # Es. 78 <= 25 (2025)
+                anno_full = f"20{anno_raw}"
+            else: # Es. 95 (se anno corrente 25) -> 1995
+                anno_full = f"19{anno_raw}"
+            # Sostituisci l'anno a 2 cifre con quello a 4 cifre nella stringa della data
+            dati_patente['data_nascita'] = data_nascita_raw[:-2] + anno_full
+        else:
+            dati_patente['data_nascita'] = data_nascita_raw
+
+        extracted_luogo = data_luogo_nascita_match.group(3).strip()
+        # Assicurati che "LE" sia trattato correttamente dopo la rimozione delle parentesi
+        cleaned_luogo = re.sub(r'[^A-Z\s\'-]', '', extracted_luogo).strip()
+        dati_patente['luogo_nascita'] = cleaned_luogo
+        print(f"DEBUG: Data di Nascita (Campo 3) - Estratto: '{data_nascita_raw}', Pulito: '{dati_patente['data_nascita']}'")
+        print(f"DEBUG: Luogo di Nascita (Campo 3) - Estratto: '{extracted_luogo}', Pulito: '{cleaned_luogo}'")
     else:
         print("DEBUG: Data e Luogo di Nascita (Campo 3) non trovati.")
 
 
     # Regex per data di rilascio (campo 4a)
-    data_rilascio_match = re.search(r'4A\s*(\d{2}\.\d{2}\.\d{4})', cleaned_text_block)
+    data_rilascio_match = re.search(r'4A\s*(\d{2}[./]\d{2}[./]\d{4})', cleaned_text_block)
     if data_rilascio_match:
         dati_patente['data_rilascio'] = data_rilascio_match.group(1).strip()
-        print(f"DEBUG: Data di Rilascio (Campo 4A) - Estratto: '{data_rilascio_match.group(1).strip()}'")
+        print(f"DEBUG: Data di Rilascio (Campo 4A) - Estratto: '{dati_patente['data_rilascio']}'")
     else:
         print("DEBUG: Data di Rilascio (Campo 4A) non trovata.")
 
 
     # Regex per data di scadenza (campo 4b)
-    data_scadenza_match = re.search(r'4B\s*(\d{2}\.\d{2}\.\d{4})', cleaned_text_block)
+    data_scadenza_match = re.search(r'4B\s*(\d{2}[./]\d{2}[./]\d{4})', cleaned_text_block)
     if data_scadenza_match:
         dati_patente['data_scadenza'] = data_scadenza_match.group(1).strip()
-        print(f"DEBUG: Data di Scadenza (Campo 4B) - Estratto: '{data_scadenza_match.group(1).strip()}'")
+        print(f"DEBUG: Data di Scadenza (Campo 4B) - Estratto: '{dati_patente['data_scadenza']}'")
     else:
         print("DEBUG: Data di Scadenza (Campo 4B) non trovata.")
 
 
     # Regex per il numero della patente (campo 5)
-    # Questa regex cerca "5" seguito da spazio, poi una sequenza di numeri/lettere/slash/trattini.
-    # Assumiamo che il numero di patente sia alfanumerico e possa contenere '/' o '-'.
-    numero_patente_match = re.search(r'5\s*([A-Z0-9\/\-]+)', cleaned_text_block)
+    # Cerchiamo una sequenza di alfanumerici, "/" o "-" dopo "5"
+    # Aggiungo '\S+' per catturare qualsiasi carattere non spazio.
+    numero_patente_match = re.search(r'5\s*([A-Z0-9\/\-]{8,})', cleaned_text_block) # Assumo almeno 8 caratteri
     if numero_patente_match:
         extracted_value = numero_patente_match.group(1).strip()
-        # Pulisci ulteriormente per rimuovere spazi extra all'interno
-        cleaned_value = re.sub(r'\s+', '', extracted_value)
+        cleaned_value = re.sub(r'\s+', '', extracted_value) # Rimuovi spazi extra
         dati_patente['numero_patente'] = cleaned_value
         print(f"DEBUG: Numero Patente (Campo 5) - Estratto: '{extracted_value}', Pulito: '{cleaned_value}'")
     else:
-        print("DEBUG: Numero Patente (Campo 5) non trovato.")
+        # Se la regex principale fallisce, prova una regex più generica per il campo 5
+        # per catturare comunque qualcosa e non perdere l'informazione
+        numero_patente_fallback_match = re.search(r'5\s*(\S+)', cleaned_text_block)
+        if numero_patente_fallback_match:
+            extracted_value = numero_patente_fallback_match.group(1).strip()
+            cleaned_value = re.sub(r'\s+', '', extracted_value)
+            dati_patente['numero_patente'] = cleaned_value
+            print(f"DEBUG: Numero Patente (Campo 5) - FALLBACK - Estratto: '{extracted_value}', Pulito: '{cleaned_value}'")
+        else:
+            print("DEBUG: Numero Patente (Campo 5) non trovato.")
 
-    # Restituisci anche full_text e cleaned_text_block per il debug nell'interfaccia
-    return dati_patente, full_text, cleaned_text_block
+
+    return dati_patente, full_text, cleaned_text_block # Ora ritorna anche i testi per il debug
 
 # --- AGGIUNGI QUESTO CODICE NEL TUO SCRIPT PRINCIPALE Streamlit DOVE CARICHI E PROCESSI L'IMMAGINE ---
 
@@ -412,10 +438,10 @@ with tabs[1]:
                         st.session_state["dati_precompilati"] = dati_patente_ocr # Salva per precompilazione
 
                         # Mostra il testo OCR completo
-                        st.text_area("🔍 Testo estratto (OCR)", value=full_text_ocr, height=150, key="ocr_text_area") # Altezza ridotta
+                        st.text_area("🔍 Testo estratto (OCR)", value=full_text_ocr, height=150, key="ocr_text_area")
                         
                         # Mostra il testo pulito per l'elaborazione (se necessario per debug nell'interfaccia)
-                        # st.text_area("Testo OCR pulito:", value=cleaned_text_block_ocr, height=100)
+                        st.text_area("Testo OCR pulito per l'elaborazione:", value=cleaned_text_block_ocr, height=150, key="cleaned_ocr_text_area") # Aggiunto key
                         
                     except Exception as e:
                         st.error(f"Errore durante l'OCR: {e}. Controlla i log per maggiori dettagli.")
@@ -453,7 +479,7 @@ with tabs[1]:
             # --- Bottone per Salvare i dati ---
             if st.button("✅ Salva Controllo", key="salva_controllo_button", use_container_width=True):
                 if not st.session_state["comune_corrente"] or st.session_state["comune_corrente"] == "NON DEFINITO":
-                    st.error("Per favore, inizia un nuovo posto di controllo nella tab '📍START SOFFERMO' prima di salvare.")
+                    st.error("Per favor, inizia un nuovo posto di controllo nella tab '📍START SOFFERMO' prima di salvare.")
                 else:
                     dati_finali = {
                         "DATA_ORA": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
