@@ -19,8 +19,10 @@ now_rome = datetime.now(pytz.utc).astimezone(rome_tz)
 #current_datetime_str = now_rome.strftime("%Y-%m-%d %H:%M:%S")
 # Percorso locale a Tesseract (LASCIAMO COMMENTATO PER IL DEPLOYMENT SU STREAMLIT CLOUD)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+logo_path = "Logo1.png" # <--- Deve essere "logo1.png" tra virgolette!
+
 try:
-    logo_path = "logo1.png" # Sostituisci con il nome del tuo file logo
+    # QUI usi la variabile logo_path che contiene il nome del file
     logo = Image.open(logo_path)
     # Inserisci il logo nella sidebar
     st.sidebar.image(logo, use_column_width=True) # use_column_width=True adatta l'immagine alla larghezza della sidebar
@@ -30,6 +32,7 @@ except FileNotFoundError:
 # Puoi anche aggiungere del testo sotto il logo nella sidebar se vuoi
 st.sidebar.markdown("---") # Una linea separatrice
 st.sidebar.write("La mia App Patenti")
+
 # === CONFIGURAZIONE PAGINA STREAMLIT ===
 st.set_page_config(
     page_title="Scanner Patenti - GdF",
