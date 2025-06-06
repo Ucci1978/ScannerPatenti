@@ -76,7 +76,7 @@ def show_banner():
         st.image("sfondo.png", use_container_width=True) # use_column_width è più flessibile di use_container_width
     except FileNotFoundError:
         st.warning("File 'sfondo.png' non trovato. Assicurati che sia nel tuo repository.")
-        
+
     st.markdown("""
     <style>
     .main {
@@ -119,7 +119,10 @@ def estrai_dati_patente(image_input):
     cleaned_text_block = full_text.upper().replace('\n', ' ')
     # Rimuovi specificamente le parentesi intorno al luogo di nascita
     cleaned_text_block = re.sub(r'\(([A-Z\s]+)\)', r'\1', cleaned_text_block) # Rimuove (LE) e lascia LE
-    cleaned_text_block = re.sub(r'[^A-Z0-9\s\/\.:-]', '', cleaned_text_block) # Manteniamo numeri, /, :, . e -
+    # Manteniamo numeri, /, :, . e - e caratteri alfanumerici, spazi
+    cleaned_text_block = re.sub(r'[^A-Z0-9\s\/\.:-]', '', cleaned_text_block)
+    # Rimuovi spazi multipli
+    cleaned_text_block = re.sub(r'\s+', ' ', cleaned_text_block).strip()
     print(f"DEBUG: Testo OCR pulito per l'elaborazione:\n{cleaned_text_block}")
 
     # Dizionario per i dati estratti
@@ -133,20 +136,21 @@ def estrai_dati_patente(image_input):
         'numero_patente': ''
     }
 
-    # Regex per il cognome (campo 1)
-    # Cattura anche punti esclamativi o altri simboli non alfanumerici e li pulisce dopo
-    cognome_match = re.search(r'1\s*([A-Z\s\'-_]+)', cleaned_text_block) # Aggiungo _ per maggiore robustezza
+    # === NUOVE REGEX CON LOOKAHEAD PER EVITARE CATTURE ECCESSIVE ===
+
+    # Regex per il cognome (campo 1) - Cattura fino all'inizio del campo 2
+    cognome_match = re.search(r'1\s*([^2]+)', cleaned_text_block)
     if cognome_match:
         extracted_value = cognome_match.group(1).strip()
-        cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip() # Rimuovi simboli non voluti
+        # Rimuovi caratteri non voluti che potrebbero essere stati catturati dalla OCR (es. '!')
+        cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
         dati_patente['cognome'] = cleaned_value
         print(f"DEBUG: Cognome (Campo 1) - Estratto: '{extracted_value}', Pulito: '{cleaned_value}'")
     else:
         print("DEBUG: Cognome (Campo 1) non trovato.")
 
-
-    # Regex per il nome (campo 2)
-    nome_match = re.search(r'2\s*([A-Z\s\'-_]+)', cleaned_text_block) # Aggiungo _
+    # Regex per il nome (campo 2) - Cattura fino all'inizio del campo 3
+    nome_match = re.search(r'2\s*([^3]+)', cleaned_text_block)
     if nome_match:
         extracted_value = nome_match.group(1).strip()
         cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
@@ -155,14 +159,12 @@ def estrai_dati_patente(image_input):
     else:
         print("DEBUG: Nome (Campo 2) non trovato.")
 
-
     # Regex per data e luogo di nascita (campo 3)
-    # Accetta sia '.' che '/' come separatore di data e anni a 2 o 4 cifre.
-    # Assicurati che "LE" sia catturato anche se non tra parentesi dopo la pulizia
-    data_luogo_nascita_match = re.search(r'3\s*(\d{2}[./]\d{2}[./](\d{4}|\d{2}))\s*([A-Z\s\'-]+)', cleaned_text_block)
+    # Cattura data (GG/MM/AA o AAAA) e poi testo (luogo), fino all'inizio del campo 4A
+    data_luogo_nascita_match = re.search(r'3\s*(\d{2}[./]\d{2}[./]\d{2}(?:\d{2})?)\s*([A-Z\s\'-]+?)(?=\s*4A|\s*4C|$)', cleaned_text_block)
     if data_luogo_nascita_match:
         data_nascita_raw = data_luogo_nascita_match.group(1).strip()
-        # Converte l'anno a 2 cifre in 4 cifre (es. 78 -> 1978, se <= anno corrente)
+        # Converte l'anno a 2 cifre in 4 cifre
         anno_raw = data_nascita_raw[-2:]
         if len(anno_raw) == 2:
             current_year_last_two_digits = datetime.now().year % 100
@@ -170,29 +172,26 @@ def estrai_dati_patente(image_input):
                 anno_full = f"20{anno_raw}"
             else: # Es. 95 (se anno corrente 25) -> 1995
                 anno_full = f"19{anno_raw}"
-            # Sostituisci l'anno a 2 cifre con quello a 4 cifre nella stringa della data
             dati_patente['data_nascita'] = data_nascita_raw[:-2] + anno_full
-        else:
+        else: # Se l'anno è già a 4 cifre
             dati_patente['data_nascita'] = data_nascita_raw
 
-        extracted_luogo = data_luogo_nascita_match.group(3).strip()
-        # Assicurati che "LE" sia trattato correttamente dopo la rimozione delle parentesi
-        cleaned_luogo = re.sub(r'[^A-Z\s\'-]', '', extracted_luogo).strip()
+        extracted_luogo = data_luogo_nascita_match.group(2).strip() # Group 2 per il luogo
+        cleaned_luogo = re.sub(r'[^A-Z\s\'-]', '', extracted_luogo).strip() # Pulizia ulteriore
         dati_patente['luogo_nascita'] = cleaned_luogo
         print(f"DEBUG: Data di Nascita (Campo 3) - Estratto: '{data_nascita_raw}', Pulito: '{dati_patente['data_nascita']}'")
         print(f"DEBUG: Luogo di Nascita (Campo 3) - Estratto: '{extracted_luogo}', Pulito: '{cleaned_luogo}'")
     else:
         print("DEBUG: Data e Luogo di Nascita (Campo 3) non trovati.")
 
-
     # Regex per data di rilascio (campo 4a)
-    data_rilascio_match = re.search(r'4A\s*(\d{2}[./]\d{2}[./]\d{4})', cleaned_text_block)
+    # Assicurati che non ci siano interferenze con 4C subito dopo
+    data_rilascio_match = re.search(r'4A\s*(\d{2}[./]\d{2}[./]\d{4})(?=\s*4C|$)', cleaned_text_block)
     if data_rilascio_match:
         dati_patente['data_rilascio'] = data_rilascio_match.group(1).strip()
         print(f"DEBUG: Data di Rilascio (Campo 4A) - Estratto: '{dati_patente['data_rilascio']}'")
     else:
         print("DEBUG: Data di Rilascio (Campo 4A) non trovata.")
-
 
     # Regex per data di scadenza (campo 4b)
     data_scadenza_match = re.search(r'4B\s*(\d{2}[./]\d{2}[./]\d{4})', cleaned_text_block)
@@ -202,19 +201,18 @@ def estrai_dati_patente(image_input):
     else:
         print("DEBUG: Data di Scadenza (Campo 4B) non trovata.")
 
-
     # Regex per il numero della patente (campo 5)
-    # Cerchiamo una sequenza di alfanumerici, "/" o "-" dopo "5"
-    # Aggiungo '\S+' per catturare qualsiasi carattere non spazio.
-    numero_patente_match = re.search(r'5\s*([A-Z0-9\/\-]{8,})', cleaned_text_block) # Assumo almeno 8 caratteri
+    # Questa regex è più precisa: cerca "5", poi spazi, poi una sequenza
+    # di almeno 8 caratteri alfanumerici, "/", o "-" che non siano spazi.
+    numero_patente_match = re.search(r'5\s*([A-Z0-9\/\-]{8,})', cleaned_text_block)
     if numero_patente_match:
         extracted_value = numero_patente_match.group(1).strip()
-        cleaned_value = re.sub(r'\s+', '', extracted_value) # Rimuovi spazi extra
+        cleaned_value = re.sub(r'\s+', '', extracted_value) # Rimuovi spazi extra interni
         dati_patente['numero_patente'] = cleaned_value
         print(f"DEBUG: Numero Patente (Campo 5) - Estratto: '{extracted_value}', Pulito: '{cleaned_value}'")
     else:
-        # Se la regex principale fallisce, prova una regex più generica per il campo 5
-        # per catturare comunque qualcosa e non perdere l'informazione
+        # Fallback più generico, ma solo per catturare qualsiasi cosa dopo il "5"
+        # se il formato rigido non viene trovato.
         numero_patente_fallback_match = re.search(r'5\s*(\S+)', cleaned_text_block)
         if numero_patente_fallback_match:
             extracted_value = numero_patente_fallback_match.group(1).strip()
@@ -267,7 +265,7 @@ if uploaded_file is not None:
     except Exception as e:
         st.error(f"Si è verificato un errore durante l'elaborazione: {e}")
         st.error("Assicurati che l'immagine sia chiara e leggibile e che le dipendenze siano installate correttamente.")
-        
+
 def aggiorna_su_google_sheets(dati_dict):
     values = [dati_dict.get(col, "") for col in COLUMNS]
     sheet.append_row(values)
@@ -276,21 +274,21 @@ def get_current_data_from_sheet():
     data_raw = sheet.get_all_values()
     if not data_raw:
         return pd.DataFrame(columns=COLUMNS)
-        
+
     header_row_index = -1
     for i, row in enumerate(data_raw):
         # Cerca l'intestazione DATA_ORA in modo case-insensitive e strip
         if "DATA_ORA" in [c.strip().upper() for c in row]:
             header_row_index = i
             break
-        
+
     if header_row_index == -1:
         st.warning("Impossibile trovare le intestazioni nel foglio Google. Verificare il formato o il nome della colonna 'DATA_ORA'.")
         return pd.DataFrame(columns=COLUMNS)
-        
+
     headers = [c.strip().upper() for c in data_raw[header_row_index]]
     data_rows = data_raw[header_row_index + 1:]
-    
+
     # Filtra righe vuote
     data_rows = [r for r in data_rows if any(cell.strip() for cell in r)]
 
@@ -300,7 +298,7 @@ def get_current_data_from_sheet():
     else:
         st.warning("I dati recuperati non corrispondono alle intestazioni previste o sono vuoti.")
         df = pd.DataFrame(columns=headers if headers else COLUMNS) # Usa le intestazioni trovate o COLUMNS come fallback
-        
+
     return df
 
 # === DEFINIZIONE COLONNE DEL FOGLIO GOOGLE ===
@@ -331,7 +329,7 @@ tabs = st.tabs(["📍START SOFFERMO", "📥 DATI SOGGETTO", "🔁STOP SOFFERMO",
 # === TAB 1: START SOFFERMO ===
 with tabs[0]:
     st.header("📍 Inizia il Posto di Controllo")
-    
+
     comuni_lista = [
         "ALBERA LIGURE", "ARQUATA SCRIVIA", "BASALUZZO", "BORGHETTO DI BORBERA", "BOSIO",
         "CABELLA LIGURE", "CANTALUPO LIGURE", "CAPRIATA D'ORBA", "CARREGA LIGURE", "CARROSIO",
@@ -386,34 +384,34 @@ with tabs[1]:
             veicolo = st.text_input("Marca e Modello del veicolo", value=st.session_state.get('dati_precompilati', {}).get('VEICOLO', ''), key="veicolo_input")
         with col_input_targa:
             targa = st.text_input("Targa del veicolo", value=st.session_state.get('dati_precompilati', {}).get('TARGA', ''), key="targa_input")
-        
+
         # Campi radio (Commerciale, COPE, Cinofili, Rilievi)
         col_radio_commerciale, col_radio_cope = st.columns(2)
         with col_radio_commerciale:
             commerciale = st.radio("Veicolo commerciale?", ["NO", "SI"], horizontal=True, key="commerciale_radio")
         with col_radio_cope:
             cope = st.radio("COPE?", ["NO", "SI"], horizontal=True, key="cope_radio")
-        
+
         col_radio_cinofili, col_radio_rilievi_si = st.columns(2)
         with col_radio_cinofili:
             cinofili = st.radio("Intervento cinofili?", ["NO", "SI"], horizontal=True, key="cinofili_radio")
         with col_radio_rilievi_si:
             rilievi_si = st.radio("Rilievi contestati?", ["NO", "SI"], horizontal=True, key="rilievi_radio")
-        
+
         rilievi = ""
         if rilievi_si == "SI":
             rilievi = st.text_area("Specifica rilievi", value=st.session_state.get('dati_precompilati', {}).get('RILIEVI', ''), key="rilievi_text_area")
 
         st.markdown("---")
         st.subheader("Documento e Dati Anagrafici")
-        
+
         # Caricamento immagine documento
         uploaded_file = st.file_uploader(
-            "📸 Carica foto del documento", 
+            "📸 Carica foto del documento",
             type=["jpg", "jpeg", "png", "heic", "heif"], # AGGIUNTO HEIC/HEIF
             key="upload_document_file"
         )
-        
+
         # Gestione del file caricato e OCR
         image = None # Inizializza image a None
 
@@ -428,7 +426,7 @@ with tabs[1]:
             # che ora sa come gestirlo con io.BytesIO.
             # Non è più necessario aprire qui l'immagine per il debug,
             # perché la funzione estrai_dati_patente gestirà l'apertura e l'OCR.
-            
+
             # --- Sezione OCR e Form per la correzione (dentro un expander) ---
             with st.expander("📝 Rivedi e Correggi Dati Estratti", expanded=True):
                 with st.spinner("Estrazione dati in corso..."):
@@ -439,43 +437,43 @@ with tabs[1]:
 
                         # Mostra il testo OCR completo
                         st.text_area("🔍 Testo estratto (OCR)", value=full_text_ocr, height=150, key="ocr_text_area")
-                        
+
                         # Mostra il testo pulito per l'elaborazione (se necessario per debug nell'interfaccia)
                         st.text_area("Testo OCR pulito per l'elaborazione:", value=cleaned_text_block_ocr, height=150, key="cleaned_ocr_text_area") # Aggiunto key
-                        
+
                     except Exception as e:
                         st.error(f"Errore durante l'OCR: {e}. Controlla i log per maggiori dettagli.")
                         full_text_ocr = "" # Reset per evitare errori se non estratto
                         cleaned_text_block_ocr = "" # Reset per evitare errori se non estratto
                         st.session_state["dati_precompilati"] = {k: "" for k in COLUMNS} # Reset in caso di errore
-                
+
                 st.markdown("### Dati Anagrafici (Modificabili)")
                 # Campi di input precompilati con i dati OCR
                 col_cognome, col_nome = st.columns(2)
                 with col_cognome:
                     st.session_state["dati_precompilati"]["COGNOME"] = st.text_input(
-                        "Cognome", 
+                        "Cognome",
                         value=st.session_state.get('dati_precompilati', {}).get('COGNOME', '')
                     ).upper()
                 with col_nome:
                     st.session_state["dati_precompilati"]["NOME"] = st.text_input(
-                        "Nome", 
+                        "Nome",
                         value=st.session_state.get('dati_precompilati', {}).get('NOME', '')
                     ).upper()
 
                 col_luogo_nascita, col_data_nascita = st.columns(2)
                 with col_luogo_nascita:
                     st.session_state["dati_precompilati"]["LUOGO_NASCITA"] = st.text_input(
-                        "Luogo di Nascita", 
+                        "Luogo di Nascita",
                         value=st.session_state.get('dati_precompilati', {}).get('LUOGO_NASCITA', '')
                     ).upper()
                 with col_data_nascita:
                     st.session_state["dati_precompilati"]["DATA_NASCITA"] = st.text_input(
-                        "Data di Nascita (GG.MM.AAAA)", 
-                        value=st.session_state.get('dati_precompilati', {}).get('DATA_NASCITA', ''), 
+                        "Data di Nascita (GG.MM.AAAA)",
+                        value=st.session_state.get('dati_precompilati', {}).get('DATA_NASCITA', ''),
                         key="data_nascita_input"
                     )
-            
+
             # --- Bottone per Salvare i dati ---
             if st.button("✅ Salva Controllo", key="salva_controllo_button", use_container_width=True):
                 if not st.session_state["comune_corrente"] or st.session_state["comune_corrente"] == "NON DEFINITO":
@@ -525,14 +523,14 @@ with tabs[2]:
 # === TAB 4: STATISTICHE ===
 with tabs[3]:
     st.header("📊 Statistiche Giornaliere e Totali")
-    
+
     # Pulsante per aggiornare/caricare i dati
     if st.button("🔄 Carica/Aggiorna Dati Statistiche", key="update_stats_button", use_container_width=True):
         st.session_state["df_controlli"] = get_current_data_from_sheet()
         st.success("Dati statistiche aggiornati!")
 
     df = st.session_state["df_controlli"]
-    
+
     if not df.empty:
         st.subheader("📋 Report Controlli Completo")
         st.dataframe(df, use_container_width=True) # Dataframe a tutta larghezza
@@ -543,7 +541,7 @@ with tabs[3]:
 
         if not df_oggi.empty and "COMUNE" in df_oggi.columns:
             st.markdown(f"### 📈 Statistiche Controlli del {oggi}")
-            
+
             tot_soggetti_oggi = len(df_oggi)
             commerciali_oggi = df_oggi["COMMERCIALE"].astype(str).str.upper().eq("SI").sum()
             privati_oggi = tot_soggetti_oggi - commerciali_oggi
@@ -557,33 +555,33 @@ with tabs[3]:
             col_tot.metric("Totale Controlli", tot_soggetti_oggi)
             col_comm.metric("Mezzi Commerciali", commerciali_oggi)
             col_priv.metric("Mezzi Privati", privati_oggi)
-            
+
             col_cope, col_cinofili, col_rilievi = st.columns(3)
             col_cope.metric("Interventi COPE", cope_oggi)
             col_cinofili.metric("Interventi Cinofili", cinofili_oggi)
             col_rilievi.metric("Rilievi Contestati", rilievi_oggi)
 
             st.markdown("### 🗂️ Rendicontazione attività per ciascun Comune (Oggi)")
-            
+
             # Assicurati che 'COMUNE' sia una stringa per le operazioni successive
             df_oggi['COMUNE'] = df_oggi['COMUNE'].astype(str)
             comuni_oggi = df_oggi["COMUNE"].unique()
 
             for comune in comuni_oggi:
                 df_comune_oggi = df_oggi[df_oggi["COMUNE"] == comune]
-                
+
                 ora_inizio_comune = df_comune_oggi["DATA_ORA"].min()
                 ora_fine_comune = df_comune_oggi["DATA_ORA"].max()
                 tot_soggetti_comune = len(df_comune_oggi)
-                
+
                 commerciali_comune = df_comune_oggi["COMMERCIALE"].astype(str).str.upper().eq("SI").sum()
-                privati_comune = tot_soggetti_comune - commerciali_comune
-                
+                privati_comune = tot_soggetti_comune - commercials_comune
+
                 st.markdown(f"""
                 ---
-                **📍 Comune:** **`{comune}`** ⏱️ **Primo controllo:** `{ora_inizio_comune}` — **Ultimo controllo:** `{ora_fine_comune}`  
-                🚗 **Totale mezzi controllati:** `{tot_soggetti_comune}`  
-                🔧 **Mezzi commerciali:** `{commerciali_comune}` — **Privati:** `{privati_comune}`  
+                **📍 Comune:** **`{comune}`** ⏱️ **Primo controllo:** `{ora_inizio_comune}` — **Ultimo controllo:** `{ora_fine_comune}`
+                🚗 **Totale mezzi controllati:** `{tot_soggetti_comune}`
+                🔧 **Mezzi commerciali:** `{commerciali_comune}` — **Privati:** `{privati_comune}`
                 """)
         else:
             st.info(f"Nessun dato di controllo disponibile per la giornata di oggi ({oggi}).")
