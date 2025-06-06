@@ -92,47 +92,41 @@ def estrai_dati_patente(testo):
     # Tentativi multipli per trovare i campi, usando diverse strategie
 
     # --- Estrazione del Cognome (Campo 1) ---
-    # Rimosso il negative lookahead che potrebbe essere troppo restrittivo.
-    # Ora cerca "1." o "COGNOME" e poi cattura qualsiasi testo alfabetico.
-    pattern_cognome = r"(?:^|\n)(?:1[\.\s]?)?\s*(?:COGNOME|SURNAME|LAST NAME|COGNOMN?)\s*([A-Z\s\'\-]+)"
+    # CERCA ESCLUSIVAMENTE "1." per il cognome. Permetti spazi o un punto dopo "1".
+    # Cattura il testo fino a una possibile categoria (es. A, B) o fine riga.
+    pattern_cognome = r"(?:^|\n)1[\.\s]*([A-Z\s\'\-]+?)(?:\s[A-Z]\d?)?\s*$"
     for i, r in enumerate(righe):
         match = re.search(pattern_cognome, r, re.IGNORECASE)
         if match:
-            dati["COGNOME"] = match.group(1).strip()
-            # Pulizia extra: rimuovi numeri o simboli non alfabetici
-            dati["COGNOME"] = re.sub(r'[^A-Z\s\'-]', '', dati["COGNOME"]).strip()
-            # Aggiunta una validazione minima: deve essere più lungo di 1 carattere
-            # e non contenere parole generiche (che prima erano gestite dai lookahead)
-            if len(dati["COGNOME"]) > 1 and \
-               "PATENTE" not in dati["COGNOME"] and \
-               "LICENZA" not in dati["COGNOME"] and \
-               "DRIVING" not in dati["COGNOME"] and \
-               "PERMIT" not in dati["COGNOME"] and \
-               "DATA" not in dati["COGNOME"]: # Aggiunto "DATA" come possibile parola errata
+            extracted_value = match.group(1).strip()
+            # Pulizia extra: rimuovi numeri o simboli non alfabetici se compaiono per errore
+            extracted_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
+            # Aggiunta una validazione più stretta per evitare false catture
+            if len(extracted_value) > 1 and \
+               not any(word in extracted_value for word in ["PATENTE", "LICENZA", "DRIVING", "PERMIT", "DATA", "DI", "CATEGORIA", "CAT", "DATA DI"]):
+                dati["COGNOME"] = extracted_value
                 break
             else:
                 dati["COGNOME"] = "" # Reset se non valido
 
     # --- Estrazione del Nome (Campo 2) ---
-    # Rimosso il negative lookahead.
-    pattern_nome = r"(?:^|\n)(?:2[\.\s]?)?\s*(?:NOME|FIRST NAME|NAME)\s*([A-Z\s\'\-]+)"
+    # CERCA ESCLUSIVAMENTE "2." per il nome. Permetti spazi o un punto dopo "2".
+    # Cattura il testo fino a una possibile categoria (es. A, B) o fine riga.
+    pattern_nome = r"(?:^|\n)2[\.\s]*([A-Z\s\'\-]+?)(?:\s[A-Z]\d?)?\s*$"
     for i, r in enumerate(righe):
         match = re.search(pattern_nome, r, re.IGNORECASE)
         if match:
-            dati["NOME"] = match.group(1).strip()
-            dati["NOME"] = re.sub(r'[^A-Z\s\'-]', '', dati["NOME"]).strip()
-            if len(dati["NOME"]) > 1 and \
-               "PATENTE" not in dati["NOME"] and \
-               "LICENZA" not in dati["NOME"] and \
-               "DRIVING" not in dati["NOME"] and \
-               "PERMIT" not in dati["NOME"] and \
-               "DATA" not in dati["NOME"]:
+            extracted_value = match.group(1).strip()
+            extracted_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
+            if len(extracted_value) > 1 and \
+               not any(word in extracted_value for word in ["PATENTE", "LICENZA", "DRIVING", "PERMIT", "DATA", "DI", "CATEGORIA", "CAT", "DATA DI"]):
+                dati["NOME"] = extracted_value
                 break
             else:
                 dati["NOME"] = ""
 
     # --- Estrazione Data e Luogo di Nascita (Campo 3) ---
-    # Questo è già stato sistemato nella versione precedente e funziona, lo lascio invariato.
+    # Questo è già stato sistemato e funziona, lo lascio invariato.
     pattern_data_luogo = r"(?:^|\n)(?:3[\.\s]?)?\s*(?:DATA DI NASCITA|DATE OF BIRTH|BORN)?\s*(\d{2}[./-]\d{2}[./-]\d{2,4})\s*([A-Z\s\'\-\(\)]{2,}(?:\s*\([A-Z]{2}\))?)"
 
     for i, r in enumerate(righe):
