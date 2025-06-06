@@ -20,7 +20,6 @@ now_rome = datetime.now(pytz.utc).astimezone(rome_tz)
 # Percorso locale a Tesseract (LASCIAMO COMMENTATO PER IL DEPLOYMENT SU STREAMLIT CLOUD)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 logo_path = "Logo1.png" # <--- Deve essere "logo1.png" tra virgolette!
-
 try:
     # QUI usi la variabile logo_path che contiene il nome del file
     logo = Image.open(logo_path)
