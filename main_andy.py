@@ -75,112 +75,146 @@ def show_banner():
     """, unsafe_allow_html=True)
 
 # === FUNZIONI PER L'ESTRAZIONE E IL SALVATAGGIO DEI DATI ===
-def estrai_dati_patente(testo):
-    # Passaggio 1: Pulizia e normalizzazione del testo OCR
-    # Converti tutto in maiuscolo per uniformità.
-    # Rimuovi caratteri che spesso sono rumore o errori di OCR, inclusi apostrofi curvi
-    cleaned_text = testo.upper().replace(':', ' ').replace(';', ' ').replace('|', ' ').replace('‘', '').replace('’', '').replace('“', '').replace('”', '')
-    # Normalizza gli spazi: sostituisci qualsiasi sequenza di spazi con un singolo spazio
-    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
-    righe = [r.strip() for r in cleaned_text.split("\n") if r.strip()]
+def estrai_dati_patente(image_path_or_object):
+    # ... (Il resto del codice della tua funzione, con i print DEBUG, va qui) ...
 
-    print(f"DEBUG: Righe pulite per l'elaborazione: {righe}") # DEBUG PRINT
+    # Assicurati che l'immagine sia in formato Pillow
+    if isinstance(image_path_or_object, str):
+        image = Image.open(image_path_or_object)
+    else:
+        image = image_path_or_object
 
-    dati = {
-        "COGNOME": "",
-        "NOME": "",
-        "DATA_NASCITA": "",
-        "LUOGO_NASCITA": ""
+    # Esegui l'OCR sull'intera immagine con lingua italiana
+    full_text = pytesseract.image_to_string(image, lang='ita')
+    print(f"DEBUG: Testo OCR completo estratto:\n{full_text}")
+
+    # Pulizia del testo per facilitare la ricerca
+    cleaned_text_block = full_text.upper().replace('\n', ' ')
+    cleaned_text_block = re.sub(r'[^A-Z0-9\s\/\.:-]', '', cleaned_text_block) # Manteniamo numeri, /, :, . e -
+    print(f"DEBUG: Testo OCR pulito per l'elaborazione:\n{cleaned_text_block}")
+
+    # Dizionario per i dati estratti
+    dati_patente = {
+        'cognome': '',
+        'nome': '',
+        'data_nascita': '',
+        'luogo_nascita': '',
+        'data_rilascio': '',
+        'data_scadenza': '',
+        'numero_patente': ''
     }
 
-    # --- Estrazione del Cognome (Campo 1) ---
-    # Cerca "1." e il testo successivo fino a fine riga o una potenziale categoria.
-    # Nota: rimosso (?:^|\n) dalla regex interna dato che iteriamo riga per riga.
-    pattern_cognome = r"1[\.\s]*([A-Z\s\'\-]{2,}).*$" # Richiede almeno 2 caratteri alfab.
-    for r in righe:
-        print(f"DEBUG Cognome: Analizzando riga: '{r}'") # DEBUG PRINT
-        match = re.search(pattern_cognome, r, re.IGNORECASE)
-        if match:
-            extracted_value = match.group(1).strip()
-            # Pulizia extra: rimuovi qualsiasi carattere non alfabetico/spazio/'/-
-            cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
-            
-            print(f"DEBUG Cognome: Trovato match. Estratto='{extracted_value}', Pulito='{cleaned_value}'") # DEBUG PRINT
-            
-            # Controllo di validazione: deve avere almeno 2 caratteri dopo la pulizia
-            # E non deve contenere parole chiave indesiderate.
-            is_valid = len(cleaned_value) >= 2 and \
-                       not any(word in cleaned_value for word in ["PATENTE", "LICENZA", "DRIVING", "PERMIT", "DATA", "DI", "CATEGORIA", "CAT", "DATA DI"])
-            
-            print(f"DEBUG Cognome: Il valore '{cleaned_value}' è valido? {is_valid}") # DEBUG PRINT
+    # Regex per il cognome (campo 1)
+    cognome_match = re.search(r'1\s*([A-Z\s\'-]+)', cleaned_text_block)
+    if cognome_match:
+        extracted_value = cognome_match.group(1).strip()
+        # Puliamo ulteriormente il cognome da caratteri non desiderati ma manteniamo - e '
+        cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
+        dati_patente['cognome'] = cleaned_value
+        print(f"DEBUG: Cognome (Campo 1) - Estratto: '{extracted_value}', Pulito: '{cleaned_value}'")
+    else:
+        print("DEBUG: Cognome (Campo 1) non trovato.")
 
-            if is_valid:
-                dati["COGNOME"] = cleaned_value
-                break
-            else:
-                dati["COGNOME"] = ""
 
-    # --- Estrazione del Nome (Campo 2) ---
-    pattern_nome = r"2[\.\s]*([A-Z\s\'\-]{2,}).*$" # Richiede almeno 2 caratteri alfab.
-    for r in righe:
-        print(f"DEBUG Nome: Analizzando riga: '{r}'") # DEBUG PRINT
-        match = re.search(pattern_nome, r, re.IGNORECASE)
-        if match:
-            extracted_value = match.group(1).strip()
-            cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
+    # Regex per il nome (campo 2)
+    nome_match = re.search(r'2\s*([A-Z\s\'-]+)', cleaned_text_block)
+    if nome_match:
+        extracted_value = nome_match.group(1).strip()
+        cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
+        dati_patente['nome'] = cleaned_value
+        print(f"DEBUG: Nome (Campo 2) - Estratto: '{extracted_value}', Pulito: '{cleaned_value}'")
+    else:
+        print("DEBUG: Nome (Campo 2) non trovato.")
 
-            print(f"DEBUG Nome: Trovato match. Estratto='{extracted_value}', Pulito='{cleaned_value}'") # DEBUG PRINT
-            
-            is_valid = len(cleaned_value) >= 2 and \
-                       not any(word in cleaned_value for word in ["PATENTE", "LICENZA", "DRIVING", "PERMIT", "DATA", "DI", "CATEGORIA", "CAT", "DATA DI"])
-            
-            print(f"DEBUG Nome: Il valore '{cleaned_value}' è valido? {is_valid}") # DEBUG PRINT
 
-            if is_valid:
-                dati["NOME"] = cleaned_value
-                break
-            else:
-                dati["NOME"] = ""
+    # Regex per data e luogo di nascita (campo 3)
+    data_luogo_nascita_match = re.search(r'3\s*(\d{2}\.\d{2}\.\d{4})\s*([A-Z\s\'-]+)', cleaned_text_block)
+    if data_luogo_nascita_match:
+        dati_patente['data_nascita'] = data_luogo_nascita_match.group(1).strip()
+        extracted_value = data_luogo_nascita_match.group(2).strip()
+        cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
+        dati_patente['luogo_nascita'] = cleaned_value
+        print(f"DEBUG: Data di Nascita (Campo 3) - Estratto: '{data_luogo_nascita_match.group(1).strip()}'")
+        print(f"DEBUG: Luogo di Nascita (Campo 3) - Estratto: '{extracted_value}', Pulito: '{cleaned_value}'")
+    else:
+        print("DEBUG: Data e Luogo di Nascita (Campo 3) non trovati.")
 
-    # --- Estrazione Data e Luogo di Nascita (Campo 3) ---
-    # Questo è già stato sistemato e funziona, lo lascio invariato.
-    pattern_data_luogo = r"(?:3[\.\s]?)?\s*(?:DATA DI NASCITA|DATE OF BIRTH|BORN)?\s*(\d{2}[./-]\d{2}[./-]\d{2,4})\s*([A-Z\s\'\-\(\)]{2,}(?:\s*\([A-Z]{2}\))?)"
 
-    for r in righe:
-        match = re.search(pattern_data_luogo, r, re.IGNORECASE)
-        if match:
-            data_nascita_raw = match.group(1)
-            dati["DATA_NASCITA"] = re.sub(r'[/-]', '.', data_nascita_raw)
+    # Regex per data di rilascio (campo 4a)
+    data_rilascio_match = re.search(r'4A\s*(\d{2}\.\d{2}\.\d{4})', cleaned_text_block)
+    if data_rilascio_match:
+        dati_patente['data_rilascio'] = data_rilascio_match.group(1).strip()
+        print(f"DEBUG: Data di Rilascio (Campo 4A) - Estratto: '{data_rilascio_match.group(1).strip()}'")
+    else:
+        print("DEBUG: Data di Rilascio (Campo 4A) non trovata.")
 
-            luogo_nascita_raw = match.group(2).strip()
-            luogo_nascita_raw = re.sub(r'\d{2}[./-]\d{2}[./-]\d{2,4}', '', luogo_nascita_raw).strip()
-            dati["LUOGO_NASCITA"] = re.sub(r'[^A-Z\s\'\-\(\)]', '', luogo_nascita_raw).strip()
 
-            if dati["DATA_NASCITA"] and dati["LUOGO_NASCITA"] and len(dati["LUOGO_NASCITA"]) > 1:
-                break
+    # Regex per data di scadenza (campo 4b)
+    data_scadenza_match = re.search(r'4B\s*(\d{2}\.\d{2}\.\d{4})', cleaned_text_block)
+    if data_scadenza_match:
+        dati_patente['data_scadenza'] = data_scadenza_match.group(1).strip()
+        print(f"DEBUG: Data di Scadenza (Campo 4B) - Estratto: '{data_scadenza_match.group(1).strip()}'")
+    else:
+        print("DEBUG: Data di Scadenza (Campo 4B) non trovata.")
 
-    # Tentativi aggiuntivi se i primi falliscono (cerca pattern di date senza etichetta "3.")
-    if not dati["DATA_NASCITA"] and not dati["LUOGO_NASCITA"]:
-        for r in righe:
-            match = re.search(r"(\d{2}[./-]\d{2}[./-]\d{2,4})\s*([A-Z\s\'\-\(\)]{2,}(?:\s*\([A-Z]{2}\))?)", r, re.IGNORECASE)
-            if match:
-                if not re.search(r'(DATA DI RILASCIO|SCADENZA|EMISSIONE|VALIDA|VAL\.)', r, re.IGNORECASE):
-                    dati["DATA_NASCITA"] = re.sub(r'[/-]', '.', match.group(1))
-                    luogo_nascita_raw = match.group(2).strip()
-                    dati["LUOGO_NASCITA"] = re.sub(r'[^A-Z\s\'\-\(\)]', '', luogo_nascita_raw).strip()
-                    if dati["DATA_NASCITA"] and dati["LUOGO_NASCITA"] and len(dati["LUOGO_NASCITA"]) > 1:
-                        break
-    
-    # Post-pulizia finale
-    for key in ["COGNOME", "NOME", "LUOGO_NASCITA"]:
-        if dati[key]:
-            dati[key] = re.sub(r'\s+', ' ', dati[key]).strip()
-            if key in ["COGNOME", "NOME"]:
-                dati[key] = re.sub(r'[^A-Z\s\'-]', '', dati[key]).strip()
-            elif key == "LUOGO_NASCITA":
-                dati[key] = re.sub(r'[^A-Z\s\'\-\(\)]', '', dati[key]).strip()
 
-    return dati
+    # Regex per il numero della patente (campo 5)
+    # Questa regex cerca "5" seguito da spazio, poi una sequenza di numeri/lettere/slash/trattini.
+    # Assumiamo che il numero di patente sia alfanumerico e possa contenere '/' o '-'.
+    numero_patente_match = re.search(r'5\s*([A-Z0-9\/\-]+)', cleaned_text_block)
+    if numero_patente_match:
+        extracted_value = numero_patente_match.group(1).strip()
+        # Pulisci ulteriormente per rimuovere spazi extra all'interno
+        cleaned_value = re.sub(r'\s+', '', extracted_value)
+        dati_patente['numero_patente'] = cleaned_value
+        print(f"DEBUG: Numero Patente (Campo 5) - Estratto: '{extracted_value}', Pulito: '{cleaned_value}'")
+    else:
+        print("DEBUG: Numero Patente (Campo 5) non trovato.")
+
+
+    return dati_patente
+
+# --- AGGIUNGI QUESTO CODICE NEL TUO SCRIPT PRINCIPALE Streamlit DOVE CARICHI E PROCESSI L'IMMAGINE ---
+
+st.title("Scanner Patente")
+
+uploaded_file = st.file_uploader("Carica un'immagine della patente", type=["png", "jpg", "jpeg", "heic"])
+
+if uploaded_file is not None:
+    try:
+        # Per visualizzare l'immagine caricata
+        st.image(uploaded_file, caption='Immagine Caricata.', use_column_width=True)
+        st.write("Elaborazione in corso...")
+
+        # Chiamata alla funzione di estrazione dati
+        # Passiamo direttamente l'oggetto uploaded_file alla funzione
+        dati_patente = estrai_dati_patente(uploaded_file)
+
+        st.subheader("Dati Estratti:")
+        st.write(f"**Cognome:** {dati_patente['cognome']}")
+        st.write(f"**Nome:** {dati_patente['nome']}")
+        st.write(f"**Data di Nascita:** {dati_patente['data_nascita']}")
+        st.write(f"**Luogo di Nascita:** {dati_patente['luogo_nascita']}")
+        st.write(f"**Data di Rilascio:** {dati_patente['data_rilascio']}")
+        st.write(f"**Data di Scadenza:** {dati_patente['data_scadenza']}")
+        st.write(f"**Numero Patente:** {dati_patente['numero_patente']}")
+
+        # --- INIZIO: NUOVO CODICE PER MOSTRARE I DEBUG NELL'APP ---
+        st.subheader("Informazioni di Debug (per l'assistenza):")
+        # Mostra il testo OCR completo
+        st.text_area("Testo OCR completo estratto:", value=full_text, height=200) # full_text deve essere accessibile qui
+
+        # Mostra il testo pulito per l'elaborazione
+        st.text_area("Testo OCR pulito per l'elaborazione:", value=cleaned_text_block, height=200) # cleaned_text_block deve essere accessibile qui
+
+        # Per mostrare i valori puliti e estratti, puoi usare st.write o st.json per il dizionario dati_patente
+        st.json(dati_patente)
+
+        # --- FINE: NUOVO CODICE PER MOSTRARE I DEBUG NELL'APP ---
+
+    except Exception as e:
+        st.error(f"Si è verificato un errore durante l'elaborazione: {e}")
+        st.error("Assicurati che l'immagine sia chiara e leggibile e che le dipendenze siano installate correttamente.")
     
 def aggiorna_su_google_sheets(dati_dict):
     values = [dati_dict.get(col, "") for col in COLUMNS]
