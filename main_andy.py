@@ -29,8 +29,8 @@ now_rome = datetime.now(pytz.utc).astimezone(rome_tz)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 logo_path = "Logo1.png" # <--- RICONTROLLA BENE MAIUSCOLE/MINUSCOLE QUI
 try:
-    st.sidebar.image(logo_path, use_column_width=True)
-    st.sidebar.success(f"Logo '{logo_path}' caricato correttamente nella sidebar!") # Messaggio di successo!
+    st.sidebar.image(logo_path, use_container_width=True)
+    #st.sidebar.success(f"Logo '{logo_path}' caricato correttamente nella sidebar!") # Messaggio di successo!
 except Exception as e:
     st.sidebar.error(f"Errore nel caricamento del logo '{logo_path}': {e}. Assicurati che il file esista e sia leggibile.")
 
