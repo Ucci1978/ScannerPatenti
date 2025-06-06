@@ -10,6 +10,14 @@ import json
 import io
 import pillow_heif
 
+# === CONFIGURAZIONE PAGINA STREAMLIT ===
+st.set_page_config(
+    page_title="Scanner Patenti - GdF",
+    page_icon="👮‍♂️", # Icona che appare nella tab del browser
+    layout="centered", # 'centered' è solitamente migliore per mobile, 'wide' per desktop
+    initial_sidebar_state="collapsed" # Per mantenere la sidebar nascosta all'inizio
+)
+
 # Registra il lettore HEIC (necessario per Pillow)
 pillow_heif.register_heif_opener()
 
@@ -31,14 +39,6 @@ except FileNotFoundError:
 # Puoi anche aggiungere del testo sotto il logo nella sidebar se vuoi
 st.sidebar.markdown("---") # Una linea separatrice
 st.sidebar.write("La mia App Patenti")
-
-# === CONFIGURAZIONE PAGINA STREAMLIT ===
-st.set_page_config(
-    page_title="Scanner Patenti - GdF",
-    page_icon="👮‍♂️", # Icona che appare nella tab del browser
-    layout="centered", # 'centered' è solitamente migliore per mobile, 'wide' per desktop
-    initial_sidebar_state="collapsed" # Per mantenere la sidebar nascosta all'inizio
-)
 
 # === GOOGLE SHEET SETUP ===
 # Le tue credenziali e la configurazione di gspread
