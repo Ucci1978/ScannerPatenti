@@ -77,8 +77,14 @@ def show_banner():
 # === FUNZIONI PER L'ESTRAZIONE E IL SALVATAGGIO DEI DATI ===
 def estrai_dati_patente(testo):
     # Passaggio 1: Pulizia e normalizzazione del testo OCR
-    cleaned_text = testo.upper().replace(':', ' ').replace(';', ' ').replace('|', ' ')
+    # Converti tutto in maiuscolo per uniformità.
+    # Rimuovi caratteri che spesso sono rumore o errori di OCR, inclusi apostrofi curvi
+    cleaned_text = testo.upper().replace(':', ' ').replace(';', ' ').replace('|', ' ').replace('‘', '').replace('’', '').replace('“', '').replace('”', '')
+    # Normalizza gli spazi: sostituisci qualsiasi sequenza di spazi con un singolo spazio
+    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
     righe = [r.strip() for r in cleaned_text.split("\n") if r.strip()]
+
+    print(f"DEBUG: Righe pulite per l'elaborazione: {righe}") # DEBUG PRINT
 
     dati = {
         "COGNOME": "",
@@ -89,60 +95,58 @@ def estrai_dati_patente(testo):
 
     # --- Estrazione del Cognome (Campo 1) ---
     # Cerca "1." e il testo successivo fino a fine riga o una potenziale categoria.
-    # Non-greedy capture (?U) to avoid issues with some regex engines, but usually Python's re is fine.
-    # Pattern: '1.' followed by 1 or more of A-Z, space, ', - then optionally a category like A, B, B1 and end of line
-    pattern_cognome = r"(?:^|\n)1[\.\s]*([A-Z\s\'\-]{2,}).*$" # Requires at least 2 alpha chars, captures rest of line
+    # Nota: rimosso (?:^|\n) dalla regex interna dato che iteriamo riga per riga.
+    pattern_cognome = r"1[\.\s]*([A-Z\s\'\-]{2,}).*$" # Richiede almeno 2 caratteri alfab.
     for r in righe:
+        print(f"DEBUG Cognome: Analizzando riga: '{r}'") # DEBUG PRINT
         match = re.search(pattern_cognome, r, re.IGNORECASE)
         if match:
             extracted_value = match.group(1).strip()
             # Pulizia extra: rimuovi qualsiasi carattere non alfabetico/spazio/'/-
             cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
             
-            # Controllo di validazione minimo: deve avere almeno 2 caratteri dopo la pulizia
-            # E non deve contenere parole chiave errate *dopo la pulizia*
-            if len(cleaned_value) >= 2 and \
-               "PATENTE" not in cleaned_value and \
-               "LICENZA" not in cleaned_value and \
-               "DRIVING" not in cleaned_value and \
-               "PERMIT" not in cleaned_value and \
-               "DATA" not in cleaned_value and \
-               "DI" not in cleaned_value and \
-               "CATEGORIA" not in cleaned_value and \
-               "CAT" not in cleaned_value:
+            print(f"DEBUG Cognome: Trovato match. Estratto='{extracted_value}', Pulito='{cleaned_value}'") # DEBUG PRINT
+            
+            # Controllo di validazione: deve avere almeno 2 caratteri dopo la pulizia
+            # E non deve contenere parole chiave indesiderate.
+            is_valid = len(cleaned_value) >= 2 and \
+                       not any(word in cleaned_value for word in ["PATENTE", "LICENZA", "DRIVING", "PERMIT", "DATA", "DI", "CATEGORIA", "CAT", "DATA DI"])
+            
+            print(f"DEBUG Cognome: Il valore '{cleaned_value}' è valido? {is_valid}") # DEBUG PRINT
+
+            if is_valid:
                 dati["COGNOME"] = cleaned_value
                 break
             else:
-                dati["COGNOME"] = "" # Reset se non valido
+                dati["COGNOME"] = ""
 
     # --- Estrazione del Nome (Campo 2) ---
-    # Cerca "2." e il testo successivo fino a fine riga o una potenziale categoria.
-    pattern_nome = r"(?:^|\n)2[\.\s]*([A-Z\s\'\-]{2,}).*$" # Requires at least 2 alpha chars, captures rest of line
+    pattern_nome = r"2[\.\s]*([A-Z\s\'\-]{2,}).*$" # Richiede almeno 2 caratteri alfab.
     for r in righe:
+        print(f"DEBUG Nome: Analizzando riga: '{r}'") # DEBUG PRINT
         match = re.search(pattern_nome, r, re.IGNORECASE)
         if match:
             extracted_value = match.group(1).strip()
             cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
+
+            print(f"DEBUG Nome: Trovato match. Estratto='{extracted_value}', Pulito='{cleaned_value}'") # DEBUG PRINT
             
-            if len(cleaned_value) >= 2 and \
-               "PATENTE" not in cleaned_value and \
-               "LICENZA" not in cleaned_value and \
-               "DRIVING" not in cleaned_value and \
-               "PERMIT" not in cleaned_value and \
-               "DATA" not in cleaned_value and \
-               "DI" not in cleaned_value and \
-               "CATEGORIA" not in cleaned_value and \
-               "CAT" not in cleaned_value:
+            is_valid = len(cleaned_value) >= 2 and \
+                       not any(word in cleaned_value for word in ["PATENTE", "LICENZA", "DRIVING", "PERMIT", "DATA", "DI", "CATEGORIA", "CAT", "DATA DI"])
+            
+            print(f"DEBUG Nome: Il valore '{cleaned_value}' è valido? {is_valid}") # DEBUG PRINT
+
+            if is_valid:
                 dati["NOME"] = cleaned_value
                 break
             else:
                 dati["NOME"] = ""
 
     # --- Estrazione Data e Luogo di Nascita (Campo 3) ---
-    # Questo funziona con l'OCR fornito, quindi lo lasciamo invariato.
-    pattern_data_luogo = r"(?:^|\n)(?:3[\.\s]?)?\s*(?:DATA DI NASCITA|DATE OF BIRTH|BORN)?\s*(\d{2}[./-]\d{2}[./-]\d{2,4})\s*([A-Z\s\'\-\(\)]{2,}(?:\s*\([A-Z]{2}\))?)"
+    # Questo è già stato sistemato e funziona, lo lascio invariato.
+    pattern_data_luogo = r"(?:3[\.\s]?)?\s*(?:DATA DI NASCITA|DATE OF BIRTH|BORN)?\s*(\d{2}[./-]\d{2}[./-]\d{2,4})\s*([A-Z\s\'\-\(\)]{2,}(?:\s*\([A-Z]{2}\))?)"
 
-    for r in righe: # Iterare su tutte le righe, non più con 'i'
+    for r in righe:
         match = re.search(pattern_data_luogo, r, re.IGNORECASE)
         if match:
             data_nascita_raw = match.group(1)
