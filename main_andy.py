@@ -32,7 +32,7 @@ try:
     # QUI usi la variabile logo_path che contiene il nome del file
     logo = Image.open(logo_path)
     # Inserisci il logo nella sidebar
-    st.sidebar.image(logo, use_column_width=True) # use_column_width=True adatta l'immagine alla larghezza della sidebar
+    st.sidebar.image(logo, use_container_width=True) # use_column_width=True adatta l'immagine alla larghezza della sidebar
 except FileNotFoundError:
     st.sidebar.error(f"Errore: Il file logo '{logo_path}' non trovato. Assicurati che sia nella stessa cartella o che il percorso sia corretto.")
 
