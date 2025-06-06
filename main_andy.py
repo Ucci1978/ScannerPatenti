@@ -10,6 +10,9 @@ import json
 import io
 import pillow_heif
 
+# Registra il lettore HEIC (necessario per Pillow)
+pillow_heif.register_heif_opener()
+
 # === CONFIGURAZIONE PAGINA STREAMLIT ===
 st.set_page_config(
     page_title="Scanner Patenti - GdF",
@@ -17,9 +20,6 @@ st.set_page_config(
     layout="centered", # 'centered' è solitamente migliore per mobile, 'wide' per desktop
     initial_sidebar_state="collapsed" # Per mantenere la sidebar nascosta all'inizio
 )
-
-# Registra il lettore HEIC (necessario per Pillow)
-pillow_heif.register_heif_opener()
 
 import pytz
 rome_tz = pytz.timezone('Europe/Rome')
