@@ -20,7 +20,7 @@ now_rome = datetime.now(pytz.utc).astimezone(rome_tz)
 # Percorso locale a Tesseract (LASCIAMO COMMENTATO PER IL DEPLOYMENT SU STREAMLIT CLOUD)
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 try:
-    logo_path = logo2.png # Sostituisci con il nome del tuo file logo
+    logo_path = logo1.png # Sostituisci con il nome del tuo file logo
     logo = Image.open(logo_path)
     # Inserisci il logo nella sidebar
     st.sidebar.image(logo, use_column_width=True) # use_column_width=True adatta l'immagine alla larghezza della sidebar
