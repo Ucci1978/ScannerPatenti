@@ -167,21 +167,29 @@ def show_banner():
     """, unsafe_allow_html=True)
 
 def estrai_dati_patente(image_input):
+    """
+    Estrae i dati da un'immagine della patente usando OCR.
+    Accetta un percorso di file (stringa) o un oggetto immagine Pillow/Streamlit UploadedFile.
+    """
     image = None
     if isinstance(image_input, str):
+        # Se è un percorso, apri l'immagine
         image = Image.open(image_input)
-    elif hasattr(image_input, 'getvalue'):
+    elif hasattr(image_input, 'getvalue'): # Se è un oggetto Streamlit UploadedFile
         image = Image.open(io.BytesIO(image_input.getvalue()))
     elif isinstance(image_input, Image.Image):
+        # Se è già un oggetto Pillow Image, usalo direttamente
         image = image_input
     else:
         raise TypeError(f"Tipo di oggetto immagine non supportato: {type(image_input)}")
 
+    # Assicurati che l'immagine sia in modalità RGB per Tesseract se necessario
     if image.mode == 'RGBA':
         image = image.convert('RGB')
-    elif image.mode == 'P':
+    elif image.mode == 'P': # Gestisci immagini con palette
         image = image.convert('RGB')
 
+    # Esegui l'OCR sull'intera immagine con lingua italiana
     full_text = pytesseract.image_to_string(image, lang='ita')
     print(f"DEBUG: Testo OCR completo estratto:\n{full_text}")
 
@@ -190,6 +198,8 @@ def estrai_dati_patente(image_input):
     cleaned_text_block = full_text.upper()
     
     # Passaggio 1: Rimuovi caratteri indesiderati che non sono numeri, lettere, o i delimitatori / . - : ( )
+    # Mantieni il punto, il trattino, lo slash, i due punti, le parentesi e gli spazi.
+    # Ogni altro carattere viene rimosso.
     cleaned_text_block = re.sub(r'[^A-Z0-9\s\/\.:\-\(\)]', '', cleaned_text_block)
     
     # Passaggio 2: Rimuovi le parentesi intorno al luogo di nascita
@@ -200,6 +210,7 @@ def estrai_dati_patente(image_input):
     
     print(f"DEBUG: Testo OCR pulito per l'elaborazione:\n{cleaned_text_block}")
 
+    # Dizionario per i dati estratti
     dati_patente = {
         'cognome': '',
         'nome': '',
@@ -214,18 +225,20 @@ def estrai_dati_patente(image_input):
 
     # Regex per il cognome (campo 1)
     # Cerchiamo "1." seguito da spazi, poi catturiamo il dato fino al prossimo numero di campo (2., 3., 4A., 4B., 4C., 5.)
-    cognome_match = re.search(r'1\s*\.\s*(.+?)(?=\s*(?:2|3|4A|4B|4C|5)\s*\.|<span class="math-inline">\)', cleaned\_text\_block\)
-if cognome\_match\:
-extracted\_value \= cognome\_match\.group\(1\)\.strip\(\)
-\# Pulizia per rimuovere eventuali caratteri speciali indesiderati che Tesseract potrebbe aver aggiunto
-cleaned\_value \= re\.sub\(r'\[^A\-Z\\s\\'\-\]', '', extracted\_value\)\.strip\(\)
-dati\_patente\['cognome'\] \= cleaned\_value
-print\(f"DEBUG\: Cognome \(Campo 1\) \- Estratto\: '\{extracted\_value\}', Pulito\: '\{cleaned\_value\}'"\)
-else\:
-print\("DEBUG\: Cognome \(Campo 1\) non trovato\."\)
-\# Regex per il nome \(campo 2\)
-\# Cerchiamo "2\." seguito da spazi, poi catturiamo il dato fino al prossimo numero di campo \(3\., 4A\., 4B\., 4C\., 5\.\)
-nome\_match \= re\.search\(r'2\\s\*\\\.\\s\*\(\.\+?\)\(?\=\\s\*\(?\:3\|4A\|4B\|4C\|5\)\\s\*\\\.\|</span>)', cleaned_text_block)
+    cognome_match = re.search(r'1\s*\.\s*(.+?)(?=\s*(?:2|3|4A|4B|4C|5)\s*\.|$)', cleaned_text_block)
+    if cognome_match:
+        extracted_value = cognome_match.group(1).strip()
+        # Pulizia per rimuovere eventuali caratteri speciali indesiderati che Tesseract potrebbe aver aggiunto
+        cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
+        dati_patente['cognome'] = cleaned_value
+        print(f"DEBUG: Cognome (Campo 1) - Estratto: '{extracted_value}', Pulito: '{cleaned_value}'")
+    else:
+        print("DEBUG: Cognome (Campo 1) non trovato.")
+
+
+    # Regex per il nome (campo 2)
+    # Cerchiamo "2." seguito da spazi, poi catturiamo il dato fino al prossimo numero di campo (3., 4A., 4B., 4C., 5.)
+    nome_match = re.search(r'2\s*\.\s*(.+?)(?=\s*(?:3|4A|4B|4C|5)\s*\.|$)', cleaned_text_block)
     if nome_match:
         extracted_value = nome_match.group(1).strip()
         cleaned_value = re.sub(r'[^A-Z\s\'-]', '', extracted_value).strip()
@@ -237,30 +250,34 @@ nome\_match \= re\.search\(r'2\\s\*\\\.\\s\*\(\.\+?\)\(?\=\\s\*\(?\:3\|4A\|4B\|4
     # Regex per data e luogo di nascita (campo 3)
     # Cattura da "3." data (GG/MM/AA o AAAA) e poi luogo, fino all'inizio del campo 4A o 4C o fine stringa
     data_luogo_nascita_match = re.search(
-        r'3\s*\.\s*(\d{2}[./]\d{2}[./]\d{2}(?:\d{2})?)\s*([A-Z\s\'-]+?)(?=\s*(?:4A|4C|4B|5)\s*\.|<span class="math-inline">\)',
-cleaned\_text\_block
-\)
-if data\_luogo\_nascita\_match\:
-data\_nascita\_raw \= data\_luogo\_nascita\_match\.group\(1\)\.strip\(\)
-anno\_raw \= data\_nascita\_raw\[\-2\:\]
-if len\(anno\_raw\) \=\= 2\:
-current\_year\_last\_two\_digits \= datetime\.now\(\)\.year % 100
-if int\(anno\_raw\) <\= current\_year\_last\_two\_digits \+ 5\: \# Tolleranza di 5 anni nel futuro per patenti recenti
-anno\_full \= f"20\{anno\_raw\}"
-else\:
-anno\_full \= f"19\{anno\_raw\}"
-dati\_patente\['data\_nascita'\] \= data\_nascita\_raw\[\:\-2\] \+ anno\_full
-else\:
-dati\_patente\['data\_nascita'\] \= data\_nascita\_raw
-extracted\_luogo \= data\_luogo\_nascita\_match\.group\(2\)\.strip\(\)
-cleaned\_luogo \= re\.sub\(r'\[^A\-Z\\s\\'\-\]', '', extracted\_luogo\)\.strip\(\)
-dati\_patente\['luogo\_nascita'\] \= cleaned\_luogo
-print\(f"DEBUG\: Data di Nascita \(Campo 3\) \- Estratto\: '\{data\_nascita\_raw\}', Pulito\: '\{dati\_patente\['data\_nascita'\]\}'"\)
-print\(f"DEBUG\: Luogo di Nascita \(Campo 3\) \- Estratto\: '\{extracted\_luogo\}', Pulito\: '\{cleaned\_luogo\}'"\)
-else\:
-print\("DEBUG\: Data e Luogo di Nascita \(Campo 3\) non trovati\."\)
-\# Regex per data di rilascio \(campo 4a\)
-data\_rilascio\_match \= re\.search\(r'4A\\s\*\\\.\\s\*\(\\d\{2\}\[\./\]\\d\{2\}\[\./\]\\d\{4\}\)\(?\=\\s\*\(?\:4C\|4B\|5\)\\s\*\\\.\|</span>)', cleaned_text_block)
+        r'3\s*\.\s*(\d{2}[./]\d{2}[./]\d{2}(?:\d{2})?)\s*([A-Z\s\'-]+?)(?=\s*(?:4A|4C|4B|5)\s*\.|$)',
+        cleaned_text_block
+    )
+    if data_luogo_nascita_match:
+        data_nascita_raw = data_luogo_nascita_match.group(1).strip()
+        # Converte l'anno a 2 cifre in 4 cifre
+        anno_raw = data_nascita_raw[-2:]
+        if len(anno_raw) == 2:
+            current_year_last_two_digits = datetime.now().year % 100
+            # Aggiunta una tolleranza di 5 anni nel futuro per patenti molto recenti
+            if int(anno_raw) <= current_year_last_two_digits + 5:
+                anno_full = f"20{anno_raw}"
+            else:
+                anno_full = f"19{anno_raw}"
+            dati_patente['data_nascita'] = data_nascita_raw[:-2] + anno_full
+        else: # Se l'anno è già a 4 cifre
+            dati_patente['data_nascita'] = data_nascita_raw
+
+        extracted_luogo = data_luogo_nascita_match.group(2).strip() # Group 2 per il luogo
+        cleaned_luogo = re.sub(r'[^A-Z\s\'-]', '', extracted_luogo).strip() # Pulizia ulteriore
+        dati_patente['luogo_nascita'] = cleaned_luogo
+        print(f"DEBUG: Data di Nascita (Campo 3) - Estratto: '{data_nascita_raw}', Pulito: '{dati_patente['data_nascita']}'")
+        print(f"DEBUG: Luogo di Nascita (Campo 3) - Estratto: '{extracted_luogo}', Pulito: '{cleaned_luogo}'")
+    else:
+        print("DEBUG: Data e Luogo di Nascita (Campo 3) non trovati.")
+
+    # Regex per data di rilascio (campo 4a)
+    data_rilascio_match = re.search(r'4A\s*\.\s*(\d{2}[./]\d{2}[./]\d{4})(?=\s*(?:4C|4B|5)\s*\.|$)', cleaned_text_block)
     if data_rilascio_match:
         dati_patente['data_rilascio'] = data_rilascio_match.group(1).strip()
         print(f"DEBUG: Data di Rilascio (Campo 4A) - Estratto: '{dati_patente['data_rilascio']}'")
@@ -276,6 +293,7 @@ data\_rilascio\_match \= re\.search\(r'4A\\s\*\\\.\\s\*\(\\d\{2\}\[\./\]\\d\{2\}
         print("DEBUG: Data di Scadenza (Campo 4B) non trovata.")
 
     # Regex per il numero della patente (campo 5)
+    # Cerchiamo "5." seguito da spazi, poi una sequenza di alfanumerici, "/", o "-" di almeno 8 caratteri.
     numero_patente_match = re.search(r'5\s*\.\s*([A-Z0-9\/\-]{8,})', cleaned_text_block)
     if numero_patente_match:
         extracted_value = numero_patente_match.group(1).strip()
@@ -283,6 +301,8 @@ data\_rilascio\_match \= re\.search\(r'4A\\s\*\\\.\\s\*\(\\d\{2\}\[\./\]\\d\{2\}
         dati_patente['numero_patente'] = cleaned_value
         print(f"DEBUG: Numero Patente (Campo 5) - Estratto: '{extracted_value}', Pulito: '{cleaned_value}'")
     else:
+        # Fallback più generico se la regex stretta fallisce.
+        # Questo catturerà qualsiasi cosa dopo "5." ma potrebbe essere meno preciso.
         numero_patente_fallback_match = re.search(r'5\s*\.\s*(\S+)', cleaned_text_block)
         if numero_patente_fallback_match:
             extracted_value = numero_patente_fallback_match.group(1).strip()
